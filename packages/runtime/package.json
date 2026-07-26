@@ -1,0 +1,22 @@
+{
+  "name": "@devlens/runtime",
+  "version": "0.0.1",
+  "description": "Captures JavaScript runtime errors and unhandled promise rejections and reports them to the DevLens Event Bus.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "sideEffects": false,
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@devlens/core": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5",
+    "jsdom": "^24.1.1"
+  }
+}
