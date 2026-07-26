@@ -1,2 +1,2 @@
-export type { RuntimePlugin } from "./types";
+export type { Plugin } from "./types";
 export { createRuntimePlugin } from "./runtime";

@@ -1,9 +1,9 @@
 import type { EventBus } from "@devlens/core";
-import type { RuntimePlugin } from "./types";
+import type { Plugin } from "./types";
 import { createErrorListener } from "./listeners/error-listener";
 import { createUnhandledRejectionListener } from "./listeners/unhandled-rejection-listener";
 
-export function createRuntimePlugin(bus: EventBus): RuntimePlugin {
+export function createRuntimePlugin(bus: EventBus): Plugin {
   let installed = false;
   let onError: ((event: ErrorEvent) => void) | null = null;
   let onUnhandledRejection: ((event: PromiseRejectionEvent) => void) | null = null;
