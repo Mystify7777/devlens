@@ -1,5 +1,13 @@
 # 0003: Naming — report() vs publish()/emit()
 
+## Status
+
+Accepted
+
+## Validation
+
+Pending first real plugin (Runtime, Console).
+
 ## Decision
 
 Keep `report()`. Considered settled for v0.1 and beyond.
@@ -26,5 +34,7 @@ Keep `report()`. Considered settled for v0.1 and beyond.
 
 ## Consequences
 
-This is now locked. Revisiting it after `runtime` or `console` ships
-against this name would be a real breaking change, not bikeshedding.
+Provisionally accepted for Core Alpha. The real test is whether `report()`
+still feels right once `runtime` and `console` are built against it — if
+either package finds itself fighting the name, that's a signal to revisit,
+not a sign the plugin is wrong.

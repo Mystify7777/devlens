@@ -1,5 +1,9 @@
 # 0001: Event Model
 
+## Status
+
+Accepted
+
 ## Decision
 
 `DevLensEvent` uses:
@@ -27,4 +31,3 @@
 
 - `id`, `version`, and `timestamp` are all optional on `DevLensEventInput`
   and assigned by the Event Bus, not the caller — plugins stay simple.
-  

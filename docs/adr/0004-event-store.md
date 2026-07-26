@@ -1,5 +1,9 @@
 # 0004: Event Store
 
+## Status
+
+Accepted
+
 ## Decision
 
 The Event Store is intentionally minimal: `add`, `clear`, `getAll`,
@@ -26,10 +30,30 @@ and stays live for future events through the same subscription.
 - `clear()` only clears the Store's own buffer; it does not affect the
   bus's replay buffer or history. The two are independent logs that
   happen to be fed by the same source.
+  - The Store no longer takes an `EventBus` in its constructor. Originally
+  it self-subscribed to a bus on creation, which coupled storage to one
+  specific event source. Now `createEventStore()` takes only
+  `EventStoreOptions`, and wiring to a bus is a separate, explicit step
+  via `connectStoreToBus(bus, store, options)` (`store-bus-connector.ts`).
+  This means a future source — a WebSocket stream, an imported session
+  file — can feed the exact same Store without the Store changing at all.
+- `find()` renamed to `filter()`. "find" carries a strong single-result
+  connotation in JS (`Array.prototype.find`); `filter()` matches actual
+  behavior (returns all matches) without fighting developer intuition.
 
 ## Deferred (tracked, not built)
 
 - Event validation (`assertValidEvent`) at the point events enter the
   system — noted again in review, still deferred until a concrete
   malformed-input case exists to validate against.
-  
+- Batch ingestion (`addMany`) — noted as worth designing room for once a
+  bulk-import use case (e.g. importing a saved session) actually exists.
+  Current single-event `add()` doesn't block adding this later.
+
+## Future consideration
+
+If a second connector type emerges (WebSocket, imported session, worker),
+consider converging on a shared `EventSource` contract
+(`{ subscribe(handler): () => void }`) so `connectStore(source, store)`
+works generically. Not built now — one implementation doesn't justify
+an interface.

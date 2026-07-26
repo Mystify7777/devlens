@@ -1,5 +1,9 @@
 # 0002: Event Bus
 
+## Status
+
+Accepted
+
 ## Decision
 
 The Event Bus is synchronous, with lightweight middleware, category/wildcard
@@ -86,4 +90,3 @@ bus.destroy()
   reverse an already-settled decision without new evidence.
 - `RingBuffer` gained `forEach()`; replay no longer allocates an
   intermediate array via `toArray().filter()`.
-  
