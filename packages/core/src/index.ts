@@ -26,3 +26,4 @@ export { EventBusDestroyedError, MiddlewareError } from "./errors";
 export { RingBuffer } from "./collections/ring-buffer";
 export { deepFreeze } from "./utils/deep-freeze";
 export { DEFAULT_REPLAY_BUFFER_SIZE, DEFAULT_STORE_SIZE } from "./constants";
+export type { Plugin } from "./plugin";

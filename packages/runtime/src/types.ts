@@ -1,6 +1,4 @@
-export interface RuntimePlugin {
-  /** Attaches listeners. Calling install() while already installed is a no-op. */
-  install(): void;
-  /** Removes listeners. Calling uninstall() while not installed is a no-op. */
-  uninstall(): void;
-}
+import type { Plugin } from "@devlens/core";
+
+/** Runtime's plugin object is just Plugin — no runtime-specific methods exist. */
+export type RuntimePlugin = Plugin;

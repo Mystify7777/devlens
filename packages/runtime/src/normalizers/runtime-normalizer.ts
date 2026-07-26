@@ -24,7 +24,7 @@ export function normalizeErrorEvent(event: {
   const stack = event.error instanceof Error ? event.error.stack : undefined;
 
   return {
-    origin: "error-listener",
+    origin: "window.error",
     category: "runtime",
     severity: "error",
     title: "Uncaught Error",
@@ -44,7 +44,7 @@ export function normalizeUnhandledRejection(event: {
   const { message, stack } = describeReason(event.reason);
 
   return {
-    origin: "unhandled-rejection-listener",
+    origin: "window.unhandledrejection",
     category: "runtime",
     severity: "error",
     title: "Unhandled Promise Rejection",

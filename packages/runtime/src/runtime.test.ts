@@ -126,8 +126,10 @@ describe("RuntimePlugin end-to-end via real window events", () => {
     );
 
     expect(handler).toHaveBeenCalledTimes(1);
+   // in the end-to-end test block, update the assertion:
     expect(handler.mock.calls[0][0].message).toBe("Uncaught TypeError: boom");
     expect(handler.mock.calls[0][0].category).toBe("runtime");
+    expect(handler.mock.calls[0][0].origin).toBe("window.error");
 
     runtime.uninstall();
   });
