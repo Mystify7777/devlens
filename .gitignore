@@ -1,0 +1,33 @@
+# dependencies
+node_modules/
+
+# build
+dist/
+coverage/
+
+# logs
+*.log
+
+# env
+.env
+.env.*
+
+# editor
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# package manager
+.pnpm-store/
+
+# turbo (future)
+.turbo/
+
+# test
+coverage/
+
+# npm
+*.tgz

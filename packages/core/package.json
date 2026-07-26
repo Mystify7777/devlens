@@ -1,0 +1,18 @@
+{
+  "name": "@devlens/core",
+  "version": "0.0.1",
+  "description": "Framework-agnostic event bus, store, and plugin API for DevLens.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "sideEffects": false,
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}
