@@ -40,7 +40,8 @@ No blanket stringify-everything-into-one-blob. Convention:
 - `message`: the first argument, coerced to a readable string if it
   isn't already one (numbers/booleans via `String()`; objects via a
   best-effort `JSON.stringify`, falling back to `String()` if that throws
-  — same pattern already established in Runtime's `describeReason`)
+  — using the same best-effort serialization strategy already
+  established in Runtime for unhandled rejection reasons)
 - `metadata.args`: the full, untouched original arguments array,
   preserved as structured data, not stringified. Downstream consumers
   (Panel, a future object inspector) get the real objects, not a lossy
@@ -88,19 +89,21 @@ already-accepted decisions colliding.
 ### Decision: a per-instance reentrancy guard around report(), not around the original call
 
 ```ts
-let isReporting = false;
+let isDispatching = false;
 
 function wrap(method, severity) {
   return (...args) => {
     original[method](...args);       // always runs, unconditionally
-    if (isReporting) return;         // guard only wraps the report step
-    isReporting = true;
+    if (isDispatching) return;       // guard only wraps the dispatch step
+    isDispatching = true;
+    const event = normalize(method, severity, args); // unguarded — bugs here should surface
     try {
-      bus.report(normalize(method, severity, args));
+      bus.report(event);
     } catch {
-      // swallow — see "preserve original behavior" above
+      // Preserve host console behavior by suppressing failures
+      // originating from the Event Bus.
     } finally {
-      isReporting = false;
+      isDispatching = false;
     }
   };
 }
@@ -113,9 +116,18 @@ Two things worth being explicit about:
   a subscriber still prints normally — it just doesn't trigger a second
   `report()`. This preserves visible console output at every level of
   nesting; it only breaks the reporting cycle, not the logging itself.
-- This guard is per-plugin-instance state, not global — two separate
-  `createConsolePlugin()` instances (unusual, but not disallowed) don't
-  interfere with each other's reentrancy tracking.
+- This guard is per-plugin-instance state (`isDispatching`, naming the
+  synchronous dispatch cycle explicitly rather than "reporting" in some
+  generic sense — DevLens may report to other destinations later, and
+  this guard is specifically about the Event Bus's dispatch, not about
+  reporting-in-general), not global — two separate
+  `createConsolePlugin()` instances don't interfere with each other's
+  reentrancy tracking.
+- The catch boundary is deliberately narrow: it exists to swallow
+  operational failures from `bus.report()` (e.g. a destroyed bus), not
+  to hide bugs in event normalization. When implemented, the try block
+  should wrap the report call itself, not the normalization step that
+  precedes it.
 
 ## Explicitly deferred past v1
 
@@ -146,3 +158,16 @@ Deviates from the originally proposed `interceptors/{log,warn,error,...}.ts`
 per-method file split: the five methods differ only in method name and
 severity, so a single factory (`createInterceptor(bus, method, severity)`)
 called five times avoids five near-identical files drifting out of sync.
+
+## Future considerations (not solved in v1)
+
+- **Object snapshotting vs. live references.** `metadata.args` stores a
+  reference to whatever objects were logged, not a deep copy. If the
+  logged object is mutated after the fact, a later-rendering consumer
+  (e.g. the Panel) will show its current state, not its state at
+  logging time — mirroring a well-known Chrome DevTools console
+  behavior that regularly confuses developers. This is intentionally
+  deferred until a real consumer of `metadata.args` exists (the Panel),
+  since snapshotting strategy (deep clone? structuredClone? leave as
+  live reference?) depends on how that consumer actually wants to use
+  the data. Recorded here so this isn't mistaken for an oversight later.

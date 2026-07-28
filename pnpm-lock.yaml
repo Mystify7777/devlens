@@ -12,6 +12,38 @@ importers:
         specifier: ^5.5.4
         version: 5.9.3
 
+  apps/playground:
+    dependencies:
+      '@devlens/console':
+        specifier: workspace:*
+        version: link:../../packages/console
+      '@devlens/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@devlens/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
+    devDependencies:
+      typescript:
+        specifier: ^5.5.4
+        version: 5.9.3
+      vite:
+        specifier: ^5.4.0
+        version: 5.4.21
+
+  packages/console:
+    dependencies:
+      '@devlens/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      typescript:
+        specifier: ^5.5.4
+        version: 5.9.3
+      vitest:
+        specifier: ^2.0.5
+        version: 2.1.9(jsdom@24.1.3)
+
   packages/core:
     devDependencies:
       typescript:

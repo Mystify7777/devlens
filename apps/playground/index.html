@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>DevLens Playground</title>
+  </head>
+  <body style="font-family: system-ui; padding: 2rem;">
+    <h1>DevLens Playground</h1>
+    <p>Open your browser console/network tab. Every button below feeds an event to the DevLens bus, which currently just logs to <code>console.table</code> until the Panel exists.</p>
+
+    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+      <button id="btn-throw">Throw Error</button>
+      <button id="btn-reject">Promise.reject()</button>
+      <button id="btn-log">console.log()</button>
+      <button id="btn-warn">console.warn()</button>
+      <button id="btn-error">console.error()</button>
+    </div>
+
+    <script type="module" src="/main.ts"></script>
+  </body>
+</html>

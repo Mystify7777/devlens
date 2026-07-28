@@ -1,0 +1,40 @@
+import { createEventBus } from "@devlens/core";
+import { createRuntimePlugin } from "@devlens/runtime";
+import { createConsolePlugin } from "@devlens/console";
+
+const bus = createEventBus();
+
+const runtime = createRuntimePlugin(bus);
+const consolePlugin = createConsolePlugin(bus);
+
+runtime.install();
+consolePlugin.install();
+
+// Subscribing AFTER console.install() means this subscriber's own
+// console.table call goes through the interceptor too — that's fine and
+// expected; it exercises the recursion guard for real, in a browser,
+// rather than only in a unit test.
+bus.subscribe("*", (event) => {
+  // eslint-disable-next-line no-console
+  console.table(event);
+});
+
+document.getElementById("btn-throw")?.addEventListener("click", () => {
+  throw new Error("Playground: intentional thrown error");
+});
+
+document.getElementById("btn-reject")?.addEventListener("click", () => {
+  Promise.reject(new Error("Playground: intentional rejection"));
+});
+
+document.getElementById("btn-log")?.addEventListener("click", () => {
+  console.log("Playground: a plain console.log", { foo: "bar" });
+});
+
+document.getElementById("btn-warn")?.addEventListener("click", () => {
+  console.warn("Playground: something worth a second look");
+});
+
+document.getElementById("btn-error")?.addEventListener("click", () => {
+  console.error("Playground: something went wrong (not thrown)");
+});
