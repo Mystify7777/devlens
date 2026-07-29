@@ -6,44 +6,43 @@ export interface CreateInterceptorOptions {
   method: ConsoleMethod;
   bus: EventBus;
   original: (...args: unknown[]) => void;
-  /** Shared, per-plugin-instance reentrancy flag — see ADR-0007. */
-  isDispatchingRef: { current: boolean };
+  getIsDispatching: () => boolean;
+  setIsDispatching: (value: boolean) => void;
 }
 
 /**
- * Wraps a single console method. Order of operations matters and is
- * non-negotiable per ADR-0007: the original method ALWAYS runs first and
+ * Wraps a single console method. The original always runs first and
  * unconditionally, so console output is never suppressed by a DevLens
- * failure. The recursion guard wraps only the report step, not the
- * passthrough — a console.log called reentrantly from inside a bus
- * subscriber still prints, it just doesn't trigger a second report.
+ * failure. isDispatching is owned by createConsolePlugin() and shared
+ * across all five interceptors via closure — no ref object needed, this
+ * isn't React state, it's a plain boolean five functions close over.
  */
 export function createInterceptor({
   method,
   bus,
   original,
-  isDispatchingRef,
+  getIsDispatching,
+  setIsDispatching,
 }: CreateInterceptorOptions) {
   return function intercepted(...args: unknown[]) {
     original(...args);
 
-    if (isDispatchingRef.current) return;
+    if (getIsDispatching()) return;
 
-    isDispatchingRef.current = true;
+    setIsDispatching(true);
     try {
-      // normalize() runs unguarded by the catch below — a bug in
-      // normalization is a DevLens programming error and should surface,
-      // not be silently swallowed alongside operational bus failures.
+      // Unguarded by the catch below — a normalization bug is a DevLens
+      // programming error and should surface, not be hidden alongside
+      // operational bus failures.
       const event = normalizeConsoleCall(method, args);
       try {
         bus.report(event);
       } catch {
-        // Intentionally narrow: suppresses ONLY failures from bus.report()
-        // (e.g. EventBusDestroyedError), so a destroyed/misbehaving bus
-        // can never break the host application's own console calls.
+        // Intentionally narrow: suppresses ONLY bus.report() failures
+        // (e.g. EventBusDestroyedError), preserving host console behavior.
       }
     } finally {
-      isDispatchingRef.current = false;
+      setIsDispatching(false);
     }
   };
 }

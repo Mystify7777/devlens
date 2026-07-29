@@ -40,6 +40,12 @@ function describeFirstArg(arg: unknown): string {
 /**
  * Pure function: console method + raw arguments -> DevLensEventInput.
  * No side effects, no bus access — testable entirely in isolation.
+ *
+ * TODO(v2): only the FIRST argument is inspected for message/stack
+ * extraction. console.error("failed", err) currently loses err.stack,
+ * since the Error is args[1], not args[0]. Worth scanning all args for
+ * an Error instance in a future revision — deferred for v1 since the
+ * common case (console.error(err) alone) already works correctly.
  */
 export function normalizeConsoleCall(
   method: ConsoleMethod,

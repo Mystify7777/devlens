@@ -154,3 +154,22 @@ describe("ConsolePlugin recursion guard", () => {
     plugin.uninstall();
   });
 });
+
+describe("ConsolePlugin reinstall", () => {
+  it("uninstall then reinstall leaves no stale wrappers — exactly one event per call", () => {
+    const bus = createEventBus();
+    const handler = vi.fn();
+    bus.subscribe("console", handler);
+
+    const plugin = createConsolePlugin(bus);
+    plugin.install();
+    plugin.uninstall();
+    plugin.install();
+
+    console.log("after reinstall");
+
+    expect(handler).toHaveBeenCalledTimes(1);
+
+    plugin.uninstall();
+  });
+});
