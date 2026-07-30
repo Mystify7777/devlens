@@ -7,7 +7,7 @@ const METHODS: ConsoleMethod[] = ["log", "info", "debug", "warn", "error"];
 export function createConsolePlugin(bus: EventBus): Plugin {
   let installed = false;
   let originals: Partial<Record<ConsoleMethod, (...args: unknown[]) => void>> = {};
-  let isDispatching = false;
+  const state = { isDispatching: false };
 
   return {
     install() {
@@ -17,15 +17,7 @@ export function createConsolePlugin(bus: EventBus): Plugin {
       for (const method of METHODS) {
         const original = console[method].bind(console);
         originals[method] = original;
-        console[method] = createInterceptor({
-          method,
-          bus,
-          original,
-          getIsDispatching: () => isDispatching,
-          setIsDispatching: (value) => {
-            isDispatching = value;
-          },
-        });
+        console[method] = createInterceptor({ method, bus, original, state });
       }
       installed = true;
     },

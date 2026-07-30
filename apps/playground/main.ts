@@ -9,6 +9,10 @@ const consolePlugin = createConsolePlugin(bus);
 
 runtime.install();
 consolePlugin.install();
+// Temporary visualization until the Panel package exists. This
+// intentionally feeds console-plugin events back into console.table(),
+// which the Console plugin's recursion guard makes safe — do not "fix"
+// this by routing around console output, that's the point.
 
 // Subscribing AFTER console.install() means this subscriber's own
 // console.table call goes through the interceptor too — that's fine and

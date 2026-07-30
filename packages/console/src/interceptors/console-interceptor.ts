@@ -6,30 +6,30 @@ export interface CreateInterceptorOptions {
   method: ConsoleMethod;
   bus: EventBus;
   original: (...args: unknown[]) => void;
-  getIsDispatching: () => boolean;
-  setIsDispatching: (value: boolean) => void;
+  /**
+   * A tiny mutable holder for the shared reentrancy flag. Not a
+   * getter/setter pair — there's no independent behavior to abstract,
+   * just one boolean five interceptors need to read and write. Plain
+   * lexical closure over this object is simpler than the getter/setter
+   * indirection from the previous revision.
+   */
+  state: { isDispatching: boolean };
 }
 
 /**
  * Wraps a single console method. The original always runs first and
  * unconditionally, so console output is never suppressed by a DevLens
- * failure. isDispatching is owned by createConsolePlugin() and shared
- * across all five interceptors via closure — no ref object needed, this
- * isn't React state, it's a plain boolean five functions close over.
+ * failure. state.isDispatching guards only the report step — a
+ * console.log called reentrantly from inside a bus subscriber still
+ * prints, it just doesn't trigger a second report.
  */
-export function createInterceptor({
-  method,
-  bus,
-  original,
-  getIsDispatching,
-  setIsDispatching,
-}: CreateInterceptorOptions) {
+export function createInterceptor({ method, bus, original, state }: CreateInterceptorOptions) {
   return function intercepted(...args: unknown[]) {
     original(...args);
 
-    if (getIsDispatching()) return;
+    if (state.isDispatching) return;
 
-    setIsDispatching(true);
+    state.isDispatching = true;
     try {
       // Unguarded by the catch below — a normalization bug is a DevLens
       // programming error and should surface, not be hidden alongside
@@ -42,7 +42,7 @@ export function createInterceptor({
         // (e.g. EventBusDestroyedError), preserving host console behavior.
       }
     } finally {
-      setIsDispatching(false);
+      state.isDispatching = false;
     }
   };
 }
