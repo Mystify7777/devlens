@@ -15,9 +15,14 @@ export function createConsolePlugin(bus: EventBus): Plugin {
       if (typeof console === "undefined") return;
 
       for (const method of METHODS) {
-        const original = console[method].bind(console);
-        originals[method] = original;
-        console[method] = createInterceptor({ method, bus, original, state });
+        const original = console[method];
+originals[method] = original;
+console[method] = createInterceptor({
+  method,
+  bus,
+  original,
+  state,
+});
       }
       installed = true;
     },

@@ -1,14 +1,21 @@
-import { createEventBus } from "@devlens/core";
+import { createEventBus, createEventStore, connectStoreToBus } from "@devlens/core";
 import { createRuntimePlugin } from "@devlens/runtime";
 import { createConsolePlugin } from "@devlens/console";
+import { createPanel } from "@devlens/panel";
+
 
 const bus = createEventBus();
+const store = createEventStore();
+connectStoreToBus(bus, store);
 
 const runtime = createRuntimePlugin(bus);
 const consolePlugin = createConsolePlugin(bus);
+const panel = createPanel(store);
 
 runtime.install();
 consolePlugin.install();
+panel.install();
+
 // Temporary visualization until the Panel package exists. This
 // intentionally feeds console-plugin events back into console.table(),
 // which the Console plugin's recursion guard makes safe — do not "fix"

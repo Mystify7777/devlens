@@ -1,10 +1,8 @@
 export interface Overlay {
-  host: HTMLElement;
-  shadowRoot: ShadowRoot;
+  readonly shadowRoot: ShadowRoot;
   mount(): void;
   unmount(): void;
 }
-
 /**
  * Creates the Panel's host element, attaches an open Shadow DOM to it
  * (ADR-0008 isolation strategy), and owns its own mount/unmount lifecycle
@@ -20,7 +18,6 @@ export function createOverlay(): Overlay {
   const shadowRoot = host.attachShadow({ mode: "open" });
 
   return {
-    host,
     shadowRoot,
     mount() {
       document.body.appendChild(host);

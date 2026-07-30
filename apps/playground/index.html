@@ -6,7 +6,12 @@
   </head>
   <body style="font-family: system-ui; padding: 2rem;">
     <h1>DevLens Playground</h1>
+    <span>Legacy</span>
     <p>Open your browser console/network tab. Every button below feeds an event to the DevLens bus, which currently just logs to <code>console.table</code> until the Panel exists.</p>
+
+
+    <span>Present</span>
+    <p>Every button below emits a DevLens event. Events are rendered live in the embedded DevLens Panel.</p>
 
     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
       <button id="btn-throw">Throw Error</button>

@@ -117,6 +117,13 @@ Session 3 decision, not specified here — an ADR describing implementation
 details before the DOM exists tends to age into stale documentation
 rather than a decision record.
 
+## Failure behavior
+
+The Panel must never throw into the host application. Rendering failures
+are isolated to the Panel and must not affect Runtime, Console, or the
+EventStore — inheriting the same "never break the host app" philosophy
+established by Runtime and Console (ADR-0005, ADR-0007).
+
 ## Cleanup lifecycle
 
 `uninstall()` must: disconnect the store subscription, remove the host
