@@ -1,0 +1,22 @@
+{
+  "name": "@devlens/panel",
+  "version": "0.0.1",
+  "description": "A floating, Shadow-DOM-isolated overlay that renders DevLens events live.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "sideEffects": false,
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@devlens/core": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5",
+    "jsdom": "^24.1.1"
+  }
+}
