@@ -29,6 +29,14 @@ function makeEvent(overrides: Partial<DevLensEvent> = {}): DevLensEvent {
  * getSubscriberCount() is a testing-only hook, not part of the real
  * EventStore interface — it exists purely so uninstall() can be
  * proven to actually unsubscribe, rather than merely "not throw."
+ *
+ * subscribe's handler param is typed as the real EventStore's
+ * StoreHandler ((event: DevLensEvent) => void), not a bare () => void.
+ * Panel's own subscribe callback ignores the event argument, which is
+ * valid — a function type with fewer declared params is assignable
+ * wherever more params are expected — but the *fake store itself*
+ * must implement the real contract, not the simplified one assumed
+ * before this was checked against the actual @devlens/core source.
  */
 interface FakeEventStore extends EventStore {
   getSubscriberCount(): number;
@@ -36,20 +44,19 @@ interface FakeEventStore extends EventStore {
 
 function createFakeStore(initialEvents: DevLensEvent[] = []): FakeEventStore {
   let events = [...initialEvents];
-  const subscribers = new Set<() => void>();
+  const subscribers = new Set<(event: DevLensEvent) => void>();
 
-  function notify() {
-    subscribers.forEach((handler) => handler());
+  function notify(event: DevLensEvent) {
+    subscribers.forEach((handler) => handler(event));
   }
 
   return {
     add(event: DevLensEvent) {
       events = [...events, event];
-      notify();
+      notify(event);
     },
     clear() {
       events = [];
-      notify();
     },
     getAll() {
       return events;
@@ -60,9 +67,11 @@ function createFakeStore(initialEvents: DevLensEvent[] = []): FakeEventStore {
     filter(predicate: (event: DevLensEvent) => boolean) {
       return events.filter(predicate);
     },
-    subscribe(handler: () => void) {
+    subscribe(handler: (event: DevLensEvent) => void) {
       subscribers.add(handler);
-      return () => subscribers.delete(handler);
+      return () => {
+        subscribers.delete(handler);
+      };
     },
     destroy() {
       subscribers.clear();
@@ -71,7 +80,7 @@ function createFakeStore(initialEvents: DevLensEvent[] = []): FakeEventStore {
     getSubscriberCount() {
       return subscribers.size;
     },
-  } as FakeEventStore;
+  };
 }
 
 function getPanelRoot(): ShadowRoot | undefined {
@@ -213,9 +222,11 @@ describe("createPanel", () => {
     )?.textContent;
     expect(firstRenderedTitle).toBe("Event 201");
 
-    const lastRenderedTitle = Array.from(
+    const titleElements = Array.from(
       getPanelRoot()?.querySelectorAll("[data-devlens-event-title]") ?? []
-    ).at(-1)?.textContent;
+    );
+    const lastRenderedTitle =
+      titleElements[titleElements.length - 1]?.textContent;
     expect(lastRenderedTitle).toBe("Event 500");
 
     panel.uninstall();

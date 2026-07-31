@@ -17,10 +17,14 @@ export function createPanel(store: EventStore): Plugin {
       overlay = createOverlay();
       const renderer = createRenderer(overlay.shadowRoot);
 
-      renderer.render(store.getAll().slice(-MAX_RENDERED_EVENTS));
+      renderer.renderEventList(store.getAll().slice(-MAX_RENDERED_EVENTS));
+      // No selection state yet — this call exists so the renderer
+      // convention (renderInspector(selectedEvent)) is already in
+      // place. Click delegation / selectedEvent wiring is a later step.
+      renderer.renderInspector(null);
 
       unsubscribe = store.subscribe(() => {
-        renderer.render(store.getAll().slice(-MAX_RENDERED_EVENTS));
+        renderer.renderEventList(store.getAll().slice(-MAX_RENDERED_EVENTS));
       });
 
       overlay.mount();

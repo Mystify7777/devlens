@@ -3,15 +3,6 @@ import { describe, it, expect, beforeEach } from "vitest";
 import type { DevLensEvent } from "@devlens/core";
 import { createRenderer } from "./renderer";
 
-// NOTE:
-//
-// Renderer currently owns the entire ShadowRoot (per ADR-0008: the
-// container/ShadowRoot split into a dedicated eventListContainer is a
-// deliberately deferred Session 3+ consideration). Once the Panel gains
-// header/toolbar/list structure and the renderer is narrowed to take
-// only the event-list sub-element, add a regression test here ensuring
-// unrelated siblings (style, header, footer) survive render() calls.
-
 let idCounter = 0;
 
 function makeEvent(overrides: Partial<DevLensEvent> = {}): DevLensEvent {
@@ -42,67 +33,138 @@ describe("createRenderer", () => {
     container = createShadowRoot();
   });
 
-  it("renders one row per event", () => {
-    const renderer = createRenderer(container);
-    const events = [makeEvent(), makeEvent(), makeEvent()];
-
-    renderer.render(events);
+  it("mounts an event-list region and an inspector region on creation", () => {
+    createRenderer(container);
 
     expect(
-      container.querySelectorAll("[data-devlens-event-row]")
-    ).toHaveLength(3);
+      container.querySelector("[data-devlens-event-list]")
+    ).not.toBeNull();
+    expect(container.querySelector("[data-devlens-inspector]")).not.toBeNull();
   });
 
-  it("clears previous event rows before rendering", () => {
-    const renderer = createRenderer(container);
-
-    renderer.render([makeEvent({ title: "First" })]);
-    renderer.render([makeEvent({ title: "Second" })]);
-
-    const rows = container.querySelectorAll("[data-devlens-event-row]");
-    expect(rows).toHaveLength(1);
-    expect(
-      container.querySelector("[data-devlens-event-title]")?.textContent
-    ).toBe("Second");
-  });
-
-  it("removes existing rows when rendered with an empty array", () => {
-    const renderer = createRenderer(container);
-
-    renderer.render([makeEvent(), makeEvent()]);
-    renderer.render([]);
+  it("renders the inspector's empty state immediately on creation", () => {
+    createRenderer(container);
 
     expect(
-      container.querySelectorAll("[data-devlens-event-row]")
-    ).toHaveLength(0);
+      container.querySelector("[data-devlens-inspector-empty]")
+    ).not.toBeNull();
   });
 
-  it("renders events in input order", () => {
-    const renderer = createRenderer(container);
-    const events = [
-      makeEvent({ title: "Alpha" }),
-      makeEvent({ title: "Beta" }),
-      makeEvent({ title: "Gamma" }),
-    ];
+  describe("renderEventList", () => {
+    it("renders one row per event", () => {
+      const renderer = createRenderer(container);
+      const events = [makeEvent(), makeEvent(), makeEvent()];
 
-    renderer.render(events);
+      renderer.renderEventList(events);
 
-    const titles = Array.from(
-      container.querySelectorAll("[data-devlens-event-title]")
-    ).map((el) => el.textContent);
+      expect(
+        container.querySelectorAll("[data-devlens-event-row]")
+      ).toHaveLength(3);
+    });
 
-    expect(titles).toEqual(["Alpha", "Beta", "Gamma"]);
+    it("clears previous event rows before rendering", () => {
+      const renderer = createRenderer(container);
+
+      renderer.renderEventList([makeEvent({ title: "First" })]);
+      renderer.renderEventList([makeEvent({ title: "Second" })]);
+
+      const rows = container.querySelectorAll("[data-devlens-event-row]");
+      expect(rows).toHaveLength(1);
+      expect(
+        container.querySelector("[data-devlens-event-title]")?.textContent
+      ).toBe("Second");
+    });
+
+    it("removes existing rows when rendered with an empty array", () => {
+      const renderer = createRenderer(container);
+
+      renderer.renderEventList([makeEvent(), makeEvent()]);
+      renderer.renderEventList([]);
+
+      expect(
+        container.querySelectorAll("[data-devlens-event-row]")
+      ).toHaveLength(0);
+    });
+
+    it("renders events in input order", () => {
+      const renderer = createRenderer(container);
+      const events = [
+        makeEvent({ title: "Alpha" }),
+        makeEvent({ title: "Beta" }),
+        makeEvent({ title: "Gamma" }),
+      ];
+
+      renderer.renderEventList(events);
+
+      const titles = Array.from(
+        container.querySelectorAll("[data-devlens-event-title]")
+      ).map((el) => el.textContent);
+
+      expect(titles).toEqual(["Alpha", "Beta", "Gamma"]);
+    });
+
+    it("does not duplicate rows when called twice with the same events", () => {
+      const renderer = createRenderer(container);
+      const events = [makeEvent(), makeEvent()];
+
+      renderer.renderEventList(events);
+      renderer.renderEventList(events);
+
+      expect(
+        container.querySelectorAll("[data-devlens-event-row]")
+      ).toHaveLength(2);
+    });
+
+    it("preserves the inspector region when the event list re-renders", () => {
+      // This is the regression test deferred in an earlier revision of
+      // this file, back when the renderer owned the whole ShadowRoot
+      // as one flat container. Now that renderEventList only touches
+      // [data-devlens-event-list], the inspector (and, if styles.ts
+      // ever injects a <style> tag directly into the ShadowRoot,
+      // that too) survives event-list re-renders untouched.
+      const renderer = createRenderer(container);
+      const inspectorNode = container.querySelector("[data-devlens-inspector]");
+
+      renderer.renderEventList([makeEvent()]);
+      renderer.renderEventList([makeEvent(), makeEvent()]);
+
+      expect(container.querySelector("[data-devlens-inspector]")).toBe(
+        inspectorNode
+      );
+    });
   });
 
-  it("does not duplicate rows when render() is called twice with the same events", () => {
-    const renderer = createRenderer(container);
-    const events = [makeEvent(), makeEvent()];
+  describe("renderInspector", () => {
+    it("renders event detail into the inspector region", () => {
+      const renderer = createRenderer(container);
 
-    renderer.render(events);
-    renderer.render(events);
+      renderer.renderInspector(makeEvent({ title: "Selected Event" }));
 
-    expect(
-      container.querySelectorAll("[data-devlens-event-row]")
-    ).toHaveLength(2);
+      expect(
+        container.querySelector("[data-devlens-inspector-title]")?.textContent
+      ).toBe("Selected Event");
+    });
+
+    it("returns the inspector to its empty state when passed null", () => {
+      const renderer = createRenderer(container);
+
+      renderer.renderInspector(makeEvent());
+      renderer.renderInspector(null);
+
+      expect(
+        container.querySelector("[data-devlens-inspector-empty]")
+      ).not.toBeNull();
+    });
+
+    it("does not affect the event list", () => {
+      const renderer = createRenderer(container);
+
+      renderer.renderEventList([makeEvent({ title: "Row Event" })]);
+      renderer.renderInspector(makeEvent({ title: "Different Selected Event" }));
+
+      expect(
+        container.querySelector("[data-devlens-event-title]")?.textContent
+      ).toBe("Row Event");
+    });
   });
 });

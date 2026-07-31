@@ -154,3 +154,42 @@ packages/panel/
 - Keyboard shortcuts.
 - Virtualized scrolling, if `MAX_RENDERED_EVENTS` ever proves
   insufficient at real event volumes.
+
+## Amendment (Session 4, via ADR-0009): renderer owns two named regions
+
+ADR-0009 ("Interactive Inspection") flagged that adding an inspector
+would be the concrete trigger for revisiting this ADR's original
+deferral: *"the renderer currently takes the whole ShadowRoot; it
+should eventually take a specific `eventListContainer` sub-element."*
+This is that revisit.
+
+**Decision:** `createRenderer(shadowRoot)` keeps taking the whole
+`ShadowRoot` — it is not narrowed to a pre-built sub-element handed in
+from `panel.ts`/`overlay.ts`. Instead, the renderer creates and owns
+exactly two named child regions within that root on construction:
+
+```text
+ShadowRoot
+├── [data-devlens-event-list]   — event rows (existing behavior)
+└── [data-devlens-inspector]    — createInspector()'s element
+```
+
+`renderEventList(events)` only clears/repopulates the list region.
+`renderInspector(event)` only calls into the Inspector's own
+`render()`. Neither touches the other's region, which incidentally
+also resolves the gap flagged (and deliberately left untested) in the
+original renderer test suite: clearing the event list no longer risks
+wiping unrelated siblings, because "unrelated siblings" are no longer
+inside the same flat container being cleared.
+
+This keeps the renderer mechanical, per this ADR's original intent —
+it still has no opinion about selection, clicks, or Panel state (those
+remain `panel.ts`'s job, per ADR-0009's Panel state model decision).
+Owning two named regions is a layout responsibility, not a policy one:
+the renderer decides *where* things render, never *whether* or *what*.
+
+**Non-goal, still deferred:** header/toolbar/footer regions. Only the
+event-list/inspector split exists now. If those are added later, this
+amendment's structure should extend rather than be redesigned from
+scratch — following the same "extend, don't relitigate" discipline
+this ADR asked for in the first place.
