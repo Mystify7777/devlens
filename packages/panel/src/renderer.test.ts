@@ -167,4 +167,73 @@ describe("createRenderer", () => {
       ).toBe("Row Event");
     });
   });
+
+  describe("setSelectedRow", () => {
+    it("adds data-selected to the matching row", () => {
+      const renderer = createRenderer(container);
+      const events = [makeEvent(), makeEvent()];
+      renderer.renderEventList(events);
+
+      renderer.setSelectedRow(events[1].id);
+
+      const rows = container.querySelectorAll("[data-devlens-event-row]");
+      expect(rows[0].hasAttribute("data-selected")).toBe(false);
+      expect(rows[1].hasAttribute("data-selected")).toBe(true);
+    });
+
+    it("moves the selection when called again with a different id", () => {
+      const renderer = createRenderer(container);
+      const events = [makeEvent(), makeEvent()];
+      renderer.renderEventList(events);
+
+      renderer.setSelectedRow(events[0].id);
+      renderer.setSelectedRow(events[1].id);
+
+      const rows = container.querySelectorAll("[data-devlens-event-row]");
+      expect(rows[0].hasAttribute("data-selected")).toBe(false);
+      expect(rows[1].hasAttribute("data-selected")).toBe(true);
+    });
+
+    it("clears the selection when called with null", () => {
+      const renderer = createRenderer(container);
+      const events = [makeEvent()];
+      renderer.renderEventList(events);
+
+      renderer.setSelectedRow(events[0].id);
+      renderer.setSelectedRow(null);
+
+      expect(
+        container.querySelector("[data-devlens-event-row]")?.hasAttribute(
+          "data-selected"
+        )
+      ).toBe(false);
+    });
+
+    it("does nothing (no throw) when the id has no matching row", () => {
+      const renderer = createRenderer(container);
+      renderer.renderEventList([makeEvent()]);
+
+      expect(() => renderer.setSelectedRow("no-such-id")).not.toThrow();
+    });
+
+    it("clears the highlight after the event list re-renders, even if the id is still present", () => {
+      // renderEventList() rebuilds row elements from scratch, so a
+      // previously-applied highlight doesn't survive on the new DOM
+      // nodes unless setSelectedRow() is called again. This documents
+      // that panel.ts is responsible for re-asserting selection after
+      // every list rebuild, not an accident of stale references.
+      const renderer = createRenderer(container);
+      const event = makeEvent();
+      renderer.renderEventList([event]);
+      renderer.setSelectedRow(event.id);
+
+      renderer.renderEventList([event]);
+
+      expect(
+        container.querySelector("[data-devlens-event-row]")?.hasAttribute(
+          "data-selected"
+        )
+      ).toBe(false);
+    });
+  });
 });

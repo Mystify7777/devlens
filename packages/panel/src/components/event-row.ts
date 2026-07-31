@@ -3,6 +3,7 @@ import type { DevLensEvent } from "@devlens/core";
 export function createEventRow(event: DevLensEvent): HTMLElement {
   const row = document.createElement("div");
   row.setAttribute("data-devlens-event-row", "");
+  row.setAttribute("data-devlens-event-id", event.id);
   row.setAttribute("data-devlens-severity", event.severity);
 
   const severity = document.createElement("span");

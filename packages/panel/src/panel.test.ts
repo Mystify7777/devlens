@@ -87,6 +87,13 @@ function getPanelRoot(): ShadowRoot | undefined {
   return document.querySelector("[data-devlens-panel-host]")?.shadowRoot ?? undefined;
 }
 
+function clickRow(eventId: string): void {
+  const row = getPanelRoot()?.querySelector(
+    `[data-devlens-event-id="${eventId}"]`
+  );
+  row?.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
+}
+
 describe("createPanel", () => {
   beforeEach(() => {
     idCounter = 0;
@@ -228,6 +235,162 @@ describe("createPanel", () => {
     const lastRenderedTitle =
       titleElements[titleElements.length - 1]?.textContent;
     expect(lastRenderedTitle).toBe("Event 500");
+
+    panel.uninstall();
+  });
+});
+
+describe("createPanel selection behavior", () => {
+  beforeEach(() => {
+    idCounter = 0;
+  });
+
+  it("renders the selected event into the inspector when a row is clicked", () => {
+    const store = createFakeStore([
+      makeEvent({ title: "First Event" }),
+      makeEvent({ title: "Second Event" }),
+    ]);
+    const panel = createPanel(store);
+    panel.install();
+
+    const events = store.getAll();
+    clickRow(events[1].id);
+
+    expect(
+      getPanelRoot()?.querySelector("[data-devlens-inspector-title]")
+        ?.textContent
+    ).toBe("Second Event");
+
+    panel.uninstall();
+  });
+
+  it("adds data-selected to the clicked row", () => {
+    const store = createFakeStore([makeEvent(), makeEvent()]);
+    const panel = createPanel(store);
+    panel.install();
+
+    const events = store.getAll();
+    clickRow(events[0].id);
+
+    const row = getPanelRoot()?.querySelector(
+      `[data-devlens-event-id="${events[0].id}"]`
+    );
+    expect(row?.hasAttribute("data-selected")).toBe(true);
+
+    panel.uninstall();
+  });
+
+  it("moves the row highlight when a different row is clicked", () => {
+    const store = createFakeStore([makeEvent(), makeEvent()]);
+    const panel = createPanel(store);
+    panel.install();
+
+    const events = store.getAll();
+    clickRow(events[0].id);
+    clickRow(events[1].id);
+
+    const firstRow = getPanelRoot()?.querySelector(
+      `[data-devlens-event-id="${events[0].id}"]`
+    );
+    const secondRow = getPanelRoot()?.querySelector(
+      `[data-devlens-event-id="${events[1].id}"]`
+    );
+    expect(firstRow?.hasAttribute("data-selected")).toBe(false);
+    expect(secondRow?.hasAttribute("data-selected")).toBe(true);
+
+    panel.uninstall();
+  });
+
+  it("does not re-render the event list when selection changes", () => {
+    const store = createFakeStore([makeEvent(), makeEvent()]);
+    const panel = createPanel(store);
+    panel.install();
+
+    const rowsBefore = getPanelRoot()?.querySelectorAll(
+      "[data-devlens-event-row]"
+    );
+    const nodeBefore = rowsBefore?.[0];
+
+    clickRow(store.getAll()[1].id);
+
+    const rowsAfter = getPanelRoot()?.querySelectorAll(
+      "[data-devlens-event-row]"
+    );
+    // Same DOM node reference, not a rebuilt one — proves selection
+    // changes don't trigger event-list reconstruction, per ADR-0009's
+    // Panel state model decision.
+    expect(rowsAfter?.[0]).toBe(nodeBefore);
+
+    panel.uninstall();
+  });
+
+  it("re-applies the row highlight after a Store update rebuilds the list", () => {
+    const store = createFakeStore([makeEvent({ title: "Selected" })]);
+    const panel = createPanel(store);
+    panel.install();
+
+    const selectedId = store.getAll()[0].id;
+    clickRow(selectedId);
+
+    store.add(makeEvent({ title: "New Event" }));
+
+    const row = getPanelRoot()?.querySelector(
+      `[data-devlens-event-id="${selectedId}"]`
+    );
+    expect(row?.hasAttribute("data-selected")).toBe(true);
+    // Inspector still reflects the original selection — a Store
+    // update alone must not change what's selected.
+    expect(
+      getPanelRoot()?.querySelector("[data-devlens-inspector-title]")
+        ?.textContent
+    ).toBe("Selected");
+
+    panel.uninstall();
+  });
+
+  it("retains selection (inspector still shows it) when the selected event scrolls beyond MAX_RENDERED_EVENTS", () => {
+    const store = createFakeStore([makeEvent({ title: "Will Scroll Out" })]);
+    const panel = createPanel(store);
+    panel.install();
+
+    const selectedId = store.getAll()[0].id;
+    clickRow(selectedId);
+
+    for (let i = 0; i < 300; i++) {
+      store.add(makeEvent({ title: `Filler ${i}` }));
+    }
+
+    // The row itself is gone — it scrolled beyond the rendered window —
+    // but the inspector still reflects the selection per the spec's
+    // persistence rule ("selection is retained ... only one
+    // representation of it has left view").
+    expect(
+      getPanelRoot()?.querySelector(
+        `[data-devlens-event-id="${selectedId}"]`
+      )
+    ).toBeNull();
+    expect(
+      getPanelRoot()?.querySelector("[data-devlens-inspector-title]")
+        ?.textContent
+    ).toBe("Will Scroll Out");
+
+    panel.uninstall();
+  });
+
+  it("ignores clicks that don't land on a row", () => {
+    const store = createFakeStore([makeEvent({ title: "Only Event" })]);
+    const panel = createPanel(store);
+    panel.install();
+
+    getPanelRoot()
+      ?.querySelector("[data-devlens-event-list]")
+      ?.dispatchEvent(
+        new MouseEvent("click", { bubbles: true, composed: true })
+      );
+
+    expect(
+      getPanelRoot()?.querySelector("[data-devlens-inspector-empty]")
+    ).not.toBeNull();
 
     panel.uninstall();
   });

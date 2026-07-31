@@ -1,187 +1,137 @@
 import type { DevLensEvent } from "@devlens/core";
 
+/**
+ * The Inspector is the persistent side-panel detail view described in
+ * docs/specs/inspection.md's "Presentation model" decision. It is
+ * always mounted (never opened/closed) and renders an explicit empty
+ * state whenever nothing is selected.
+ *
+ * It has zero opinion about *how* selection happens or *when* it
+ * changes — that's Panel's job (via selectEvent()) and Renderer's job
+ * (renderInspector() is one of three independent capabilities). The
+ * Inspector only answers "given this event, or none, what should the
+ * detail view show?"
+ *
+ * Rendering is generic key-value rendering, not per-category
+ * templates: severity/title/message/stack/tags are the fields every
+ * DevLensEvent can have, and metadata/context are rendered as plain
+ * key-value lists with no hardcoded knowledge of what a Runtime,
+ * Console, or (future) Network event's metadata looks like. This is
+ * deliberate — it's the reason a future Network event needs zero
+ * Inspector changes to render sensibly.
+ *
+ * Missing or empty fields are omitted entirely rather than shown as
+ * placeholders ("stack: —" etc.) — an event with no stack simply has
+ * no stack section.
+ *
+ * Every value is written via textContent, never innerHTML. Event
+ * data (message, stack, metadata values) originates from the host
+ * app and must never be interpreted as markup.
+ */
 export interface Inspector {
   readonly element: HTMLElement;
   render(event: DevLensEvent | null): void;
-}
-
-function renderEmptyState(root: HTMLElement): void {
-  root.replaceChildren();
-  root.setAttribute("data-devlens-inspector-state", "empty");
-
-  const message = document.createElement("p");
-  message.setAttribute("data-devlens-inspector-empty", "");
-  message.textContent =
-    "Select an event to inspect it. Details, stack traces, metadata, and context will appear here.";
-
-  root.appendChild(message);
-}
-
-// Sections are rendered in reading order:
-//
-//   message
-//   stack
-//   metadata
-//   context
-//   tags
-//
-// Future fields should preserve this progression unless there's a
-// compelling UX reason to reorder them — the answer to "where should
-// a new field go" is "wherever it belongs in this reading flow," not
-// "wherever its source category feels most important."
-
-function safeStringify(value: unknown): string {
-  if (typeof value === "string") {
-    return value;
-  }
-
-  try {
-    return JSON.stringify(value);
-  } catch {
-    // Circular or otherwise non-serializable; fall back rather than throw.
-    return String(value);
-  }
-}
-
-function createKeyValueSection(
-  label: string,
-  attribute: string,
-  data: Record<string, unknown>
-): HTMLElement | null {
-  const keys = Object.keys(data);
-  if (keys.length === 0) return null;
-
-  const section = document.createElement("section");
-  section.setAttribute(attribute, "");
-
-  const heading = document.createElement("h3");
-  heading.textContent = label;
-  section.appendChild(heading);
-
-  const list = document.createElement("dl");
-  for (const key of keys) {
-    const dt = document.createElement("dt");
-    dt.textContent = key;
-
-    const dd = document.createElement("dd");
-    dd.textContent = safeStringify(data[key]);
-
-    list.append(dt, dd);
-  }
-  section.appendChild(list);
-
-  return section;
-}
-
-function createListSection(
-  label: string,
-  attribute: string,
-  items: string[]
-): HTMLElement | null {
-  if (items.length === 0) return null;
-
-  const section = document.createElement("section");
-  section.setAttribute(attribute, "");
-
-  const heading = document.createElement("h3");
-  heading.textContent = label;
-  section.appendChild(heading);
-
-  const list = document.createElement("ul");
-  for (const item of items) {
-    const li = document.createElement("li");
-    li.textContent = item;
-    list.appendChild(li);
-  }
-  section.appendChild(list);
-
-  return section;
-}
-
-function renderEventDetail(root: HTMLElement, event: DevLensEvent): void {
-  root.replaceChildren();
-  root.setAttribute("data-devlens-inspector-state", "populated");
-
-  const header = document.createElement("header");
-  header.setAttribute("data-devlens-inspector-header", "");
-
-  const severity = document.createElement("span");
-  severity.setAttribute("data-devlens-inspector-severity", "");
-  severity.textContent = event.severity.toUpperCase();
-
-  const title = document.createElement("h2");
-  title.setAttribute("data-devlens-inspector-title", "");
-  title.textContent = event.title;
-
-  header.append(severity, title);
-  root.appendChild(header);
-
-  const message = document.createElement("p");
-  message.setAttribute("data-devlens-inspector-message", "");
-  message.textContent = event.message;
-  root.appendChild(message);
-
-  // Missing fields disappear entirely rather than rendering an empty
-  // or placeholder section — the inspector describes the event that
-  // exists, not the maximal event schema.
-
-  if (event.stack) {
-    const stackSection = document.createElement("section");
-    stackSection.setAttribute("data-devlens-inspector-stack", "");
-
-    const heading = document.createElement("h3");
-    heading.textContent = "Stack";
-    stackSection.appendChild(heading);
-
-    const pre = document.createElement("pre");
-    pre.textContent = event.stack;
-    stackSection.appendChild(pre);
-
-    root.appendChild(stackSection);
-  }
-
-  if (event.metadata) {
-    const section = createKeyValueSection(
-      "Metadata",
-      "data-devlens-inspector-metadata",
-      event.metadata
-    );
-    if (section) root.appendChild(section);
-  }
-
-  if (event.context) {
-    const section = createKeyValueSection(
-      "Context",
-      "data-devlens-inspector-context",
-      event.context
-    );
-    if (section) root.appendChild(section);
-  }
-
-  if (event.tags) {
-    const section = createListSection(
-      "Tags",
-      "data-devlens-inspector-tags",
-      event.tags
-    );
-    if (section) root.appendChild(section);
-  }
 }
 
 export function createInspector(): Inspector {
   const element = document.createElement("div");
   element.setAttribute("data-devlens-inspector", "");
 
-  renderEmptyState(element);
+  function renderEmptyState() {
+    element.replaceChildren();
 
-  return {
-    element,
-    render(event) {
-      if (event === null) {
-        renderEmptyState(element);
-        return;
-      }
-      renderEventDetail(element, event);
-    },
-  };
+    const empty = document.createElement("div");
+    empty.setAttribute("data-devlens-inspector-empty", "");
+    empty.textContent = "No event selected.";
+    element.appendChild(empty);
+  }
+
+  function appendField(name: string, value: string) {
+    const field = document.createElement("div");
+    field.setAttribute(`data-devlens-inspector-${name}`, "");
+    field.textContent = value;
+    element.appendChild(field);
+  }
+
+  function appendKeyValueSection(
+    name: string,
+    record: Record<string, unknown> | undefined
+  ) {
+    if (!record) return;
+
+    const entries = Object.entries(record);
+    if (entries.length === 0) return;
+
+    const section = document.createElement("div");
+    section.setAttribute(`data-devlens-inspector-${name}`, "");
+
+    for (const [key, value] of entries) {
+      const row = document.createElement("div");
+      row.setAttribute(`data-devlens-inspector-${name}-entry`, "");
+
+      const keyEl = document.createElement("span");
+      keyEl.setAttribute(`data-devlens-inspector-${name}-key`, "");
+      keyEl.textContent = key;
+
+      const valueEl = document.createElement("span");
+      valueEl.setAttribute(`data-devlens-inspector-${name}-value`, "");
+      valueEl.textContent = stringifyValue(value);
+
+      row.append(keyEl, valueEl);
+      section.appendChild(row);
+    }
+
+    element.appendChild(section);
+  }
+
+  function stringifyValue(value: unknown): string {
+    if (typeof value === "string") return value;
+    if (value === null || value === undefined) return String(value);
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+
+  function appendTags(tags: string[] | undefined) {
+    if (!tags || tags.length === 0) return;
+
+    const section = document.createElement("div");
+    section.setAttribute("data-devlens-inspector-tags", "");
+
+    for (const tag of tags) {
+      const tagEl = document.createElement("span");
+      tagEl.setAttribute("data-devlens-inspector-tag", "");
+      tagEl.textContent = tag;
+      section.appendChild(tagEl);
+    }
+
+    element.appendChild(section);
+  }
+
+  function render(event: DevLensEvent | null) {
+    if (event === null) {
+      renderEmptyState();
+      return;
+    }
+
+    element.replaceChildren();
+
+    appendField("severity", event.severity.toUpperCase());
+    appendField("title", event.title);
+    appendField("message", event.message);
+
+    if (event.stack) {
+      appendField("stack", event.stack);
+    }
+
+    appendKeyValueSection("metadata", event.metadata);
+    appendKeyValueSection("context", event.context);
+    appendTags(event.tags);
+  }
+
+  renderEmptyState();
+
+  return { element, render };
 }

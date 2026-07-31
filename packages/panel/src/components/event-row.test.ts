@@ -63,6 +63,11 @@ describe("createEventRow", () => {
     expect(messageEl?.querySelector("img")).toBeNull();
   });
 
+  it("sets data-devlens-event-id to the event's id", () => {
+    const row = createEventRow(makeEvent({ id: "event-abc123" }));
+    expect(row.getAttribute("data-devlens-event-id")).toBe("event-abc123");
+  });
+
   it("renders the severity, title, and message elements", () => {
     const row = createEventRow(makeEvent());
     const semanticElements = row.querySelectorAll(
