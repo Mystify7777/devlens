@@ -193,3 +193,48 @@ event-list/inspector split exists now. If those are added later, this
 amendment's structure should extend rather than be redesigned from
 scratch — following the same "extend, don't relitigate" discipline
 this ADR asked for in the first place.
+
+## Amendment (Session 5): toolbar region, owned by `panel.ts`, not the renderer
+
+This is the "added later" case the amendment above anticipated. Filter
+controls (see `docs/specs/inspection.md`'s "Filter controls model")
+need a third ShadowRoot region. The layout becomes:
+
+```text
+ShadowRoot
+├── [data-devlens-toolbar]      — createToolbar()'s element (new)
+├── [data-devlens-event-list]   — event rows (existing behavior)
+└── [data-devlens-inspector]    — createInspector()'s element
+```
+
+**Decision: the toolbar region is created and mounted by `panel.ts`
+directly, not by `createRenderer()`.** This is a deliberate asymmetry
+with the event-list/inspector split, not an inconsistency:
+
+- `renderer.ts`'s whole reason for existing is to stay mechanical — it
+  renders *state* into regions and has no opinion about clicks,
+  selection, or Panel lifecycle (this ADR's original intent;
+  reaffirmed by the Session 4 amendment above). The event list and
+  inspector are both pure projections of state `panel.ts` hands them.
+- The toolbar is not a projection of state — it is itself a source of
+  state changes (a checkbox toggling *produces* a new `FilterState`).
+  Giving the renderer a region whose entire purpose is emitting
+  events back out would reintroduce exactly the coupling the Session 4
+  amendment was written to avoid.
+
+So `panel.ts` creates the toolbar the same way it creates the overlay
+— `createToolbar(onFiltersChange)` — and appends `toolbar.element` to
+`overlay.shadowRoot` *before* calling `createRenderer(overlay.shadowRoot)`,
+which is what puts the toolbar first in DOM order. `createRenderer()`
+itself is completely unaware the toolbar region exists; it still only
+knows about the two regions from the Session 4 amendment.
+
+**The toolbar's only outward communication channel is its
+`onFiltersChange` callback**, which `panel.ts` wires to the exact same
+internal function its own public `setFilters()` method calls. The
+toolbar does not import `applyFilters()`, `computeNavigationContext()`,
+or the Store — it has no idea the filtering engine exists beyond the
+shape of `FilterState` it needs to construct. See inspection.md's
+"the toolbar shouldn't even know the filtering engine exists"
+principle.
+

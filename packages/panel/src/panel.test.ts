@@ -395,3 +395,266 @@ describe("createPanel selection behavior", () => {
     panel.uninstall();
   });
 });
+
+describe("createPanel filtering behavior (Navigation Context)", () => {
+  beforeEach(() => {
+    idCounter = 0;
+  });
+
+  it("behaves identically to no filtering when setFilters is given the empty filter state", () => {
+    const store = createFakeStore([
+      makeEvent({ title: "First Event" }),
+      makeEvent({ title: "Second Event" }),
+    ]);
+    const panel = createPanel(store);
+    panel.install();
+
+    panel.setFilters({ categories: [], severities: [] });
+
+    const rows = getPanelRoot()?.querySelectorAll("[data-devlens-event-row]");
+    expect(rows).toHaveLength(2);
+
+    panel.uninstall();
+  });
+
+  it("reduces the rendered list to only events matching the active filter", () => {
+    const store = createFakeStore([
+      makeEvent({ title: "A Runtime Event", category: "runtime" }),
+      makeEvent({ title: "A Console Event", category: "console" }),
+      makeEvent({ title: "Another Runtime Event", category: "runtime" }),
+    ]);
+    const panel = createPanel(store);
+    panel.install();
+
+    panel.setFilters({ categories: ["runtime"], severities: [] });
+
+    const titles = Array.from(
+      getPanelRoot()?.querySelectorAll("[data-devlens-event-title]") ?? []
+    ).map((el) => el.textContent);
+
+    expect(titles).toEqual(["A Runtime Event", "Another Runtime Event"]);
+
+    panel.uninstall();
+  });
+
+  it("applies the filter before windowing to MAX_RENDERED_EVENTS, not within an already-windowed slice", () => {
+    // 400 filler console events, then a single runtime event near the
+    // very start of the Store. If windowing happened before filtering,
+    // the last 300 events (all console) would contain zero runtime
+    // events, and this filter would incorrectly show nothing.
+    const events = [
+      makeEvent({ title: "The Runtime Event", category: "runtime" }),
+      ...Array.from({ length: 400 }, (_, i) =>
+        makeEvent({ title: `Filler ${i}`, category: "console" })
+      ),
+    ];
+    const store = createFakeStore(events);
+    const panel = createPanel(store);
+    panel.install();
+
+    panel.setFilters({ categories: ["runtime"], severities: [] });
+
+    const titles = Array.from(
+      getPanelRoot()?.querySelectorAll("[data-devlens-event-title]") ?? []
+    ).map((el) => el.textContent);
+
+    expect(titles).toEqual(["The Runtime Event"]);
+
+    panel.uninstall();
+  });
+
+  it("retains selection when the selected event still matches the active filter", () => {
+    const store = createFakeStore([
+      makeEvent({ title: "Runtime Selection", category: "runtime" }),
+      makeEvent({ title: "Console Event", category: "console" }),
+    ]);
+    const panel = createPanel(store);
+    panel.install();
+
+    const selectedId = store.getAll()[0].id;
+    clickRow(selectedId);
+
+    panel.setFilters({ categories: ["runtime"], severities: [] });
+
+    expect(
+      getPanelRoot()
+        ?.querySelector(`[data-devlens-event-id="${selectedId}"]`)
+        ?.hasAttribute("data-selected")
+    ).toBe(true);
+    expect(
+      getPanelRoot()?.querySelector("[data-devlens-inspector-title]")
+        ?.textContent
+    ).toBe("Runtime Selection");
+
+    panel.uninstall();
+  });
+
+  it("clears selection when the selected event is excluded by a newly-applied filter", () => {
+    const store = createFakeStore([
+      makeEvent({ title: "Console Selection", category: "console" }),
+      makeEvent({ title: "Runtime Event", category: "runtime" }),
+    ]);
+    const panel = createPanel(store);
+    panel.install();
+
+    const selectedId = store.getAll()[0].id;
+    clickRow(selectedId);
+    expect(
+      getPanelRoot()?.querySelector("[data-devlens-inspector-title]")
+        ?.textContent
+    ).toBe("Console Selection");
+
+    // The active filter now excludes the console category entirely —
+    // unlike scrolling beyond MAX_RENDERED_EVENTS, the event is no
+    // longer part of the Navigation Context at all.
+    panel.setFilters({ categories: ["runtime"], severities: [] });
+
+    expect(
+      getPanelRoot()?.querySelector("[data-devlens-inspector-empty]")
+    ).not.toBeNull();
+    expect(
+      getPanelRoot()?.querySelector(`[data-devlens-event-id="${selectedId}"]`)
+    ).toBeNull();
+
+    panel.uninstall();
+  });
+
+  it("continues respecting the active filter when the Store receives a new event", () => {
+    const store = createFakeStore([
+      makeEvent({ title: "Existing Runtime", category: "runtime" }),
+    ]);
+    const panel = createPanel(store);
+    panel.install();
+
+    panel.setFilters({ categories: ["runtime"], severities: [] });
+    store.add(makeEvent({ title: "New Console Event", category: "console" }));
+    store.add(makeEvent({ title: "New Runtime Event", category: "runtime" }));
+
+    const titles = Array.from(
+      getPanelRoot()?.querySelectorAll("[data-devlens-event-title]") ?? []
+    ).map((el) => el.textContent);
+
+    expect(titles).toEqual(["Existing Runtime", "New Runtime Event"]);
+
+    panel.uninstall();
+  });
+
+  it("re-renders the previously excluded events once the filter is cleared", () => {
+    const store = createFakeStore([
+      makeEvent({ title: "Runtime Event", category: "runtime" }),
+      makeEvent({ title: "Console Event", category: "console" }),
+    ]);
+    const panel = createPanel(store);
+    panel.install();
+
+    panel.setFilters({ categories: ["runtime"], severities: [] });
+    expect(
+      getPanelRoot()?.querySelectorAll("[data-devlens-event-row]")
+    ).toHaveLength(1);
+
+    panel.setFilters({ categories: [], severities: [] });
+    expect(
+      getPanelRoot()?.querySelectorAll("[data-devlens-event-row]")
+    ).toHaveLength(2);
+
+    panel.uninstall();
+  });
+});
+
+describe("createPanel toolbar integration", () => {
+  beforeEach(() => {
+    idCounter = 0;
+  });
+
+  function toolbarCheckbox(group: string, value: string): HTMLInputElement {
+    const el = getPanelRoot()?.querySelector<HTMLInputElement>(
+      `[data-devlens-toolbar-${group}-checkbox][data-value="${value}"]`
+    );
+    if (!el) throw new Error(`toolbar checkbox not found: ${group}/${value}`);
+    return el;
+  }
+
+  function toggleToolbarCheckbox(group: string, value: string): void {
+    const el = toolbarCheckbox(group, value);
+    el.checked = !el.checked;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  it("mounts the toolbar above the event list in DOM order", () => {
+    const store = createFakeStore();
+    const panel = createPanel(store);
+    panel.install();
+
+    const children = Array.from(getPanelRoot()?.children ?? []);
+    const toolbarIndex = children.findIndex((el) =>
+      el.hasAttribute("data-devlens-toolbar")
+    );
+    const listIndex = children.findIndex((el) =>
+      el.hasAttribute("data-devlens-event-list")
+    );
+
+    expect(toolbarIndex).toBeGreaterThanOrEqual(0);
+    expect(listIndex).toBeGreaterThan(toolbarIndex);
+
+    panel.uninstall();
+  });
+
+  it("actually checking a category checkbox in the mounted toolbar narrows the rendered list", () => {
+    const store = createFakeStore([
+      makeEvent({ title: "Runtime Event", category: "runtime" }),
+      makeEvent({ title: "Console Event", category: "console" }),
+    ]);
+    const panel = createPanel(store);
+    panel.install();
+
+    toggleToolbarCheckbox("category", "runtime");
+
+    const titles = Array.from(
+      getPanelRoot()?.querySelectorAll("[data-devlens-event-title]") ?? []
+    ).map((el) => el.textContent);
+    expect(titles).toEqual(["Runtime Event"]);
+
+    panel.uninstall();
+  });
+
+  it("unchecking a toolbar checkbox restores the previously excluded events", () => {
+    const store = createFakeStore([
+      makeEvent({ title: "Runtime Event", category: "runtime" }),
+      makeEvent({ title: "Console Event", category: "console" }),
+    ]);
+    const panel = createPanel(store);
+    panel.install();
+
+    toggleToolbarCheckbox("category", "runtime"); // check
+    toggleToolbarCheckbox("category", "runtime"); // uncheck
+
+    const titles = Array.from(
+      getPanelRoot()?.querySelectorAll("[data-devlens-event-title]") ?? []
+    ).map((el) => el.textContent);
+    expect(titles).toEqual(["Runtime Event", "Console Event"]);
+
+    panel.uninstall();
+  });
+
+  it("resets the toolbar's checkbox state on a fresh install after uninstall", () => {
+    const store = createFakeStore([
+      makeEvent({ title: "Runtime Event", category: "runtime" }),
+      makeEvent({ title: "Console Event", category: "console" }),
+    ]);
+    const panel = createPanel(store);
+
+    panel.install();
+    toggleToolbarCheckbox("category", "runtime");
+    panel.uninstall();
+
+    panel.install();
+
+    const titles = Array.from(
+      getPanelRoot()?.querySelectorAll("[data-devlens-event-title]") ?? []
+    ).map((el) => el.textContent);
+    expect(titles).toEqual(["Runtime Event", "Console Event"]);
+    expect(toolbarCheckbox("category", "runtime").checked).toBe(false);
+
+    panel.uninstall();
+  });
+});
