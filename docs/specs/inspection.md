@@ -492,6 +492,160 @@ worth tightening once Search exists and "what's clickable" and "what's
 in the Store" can diverge more meaningfully. Noted here rather than
 fixed now, per the project's discipline against unforced changes.
 
+### Search model — Accepted: developer-facing text fields, trimmed case-insensitive substring, pure engine before controls
+
+Four decisions, following the same pattern as Filtering — recorded
+together because, like the Filtering model, they only make sense as a
+set. Search is a second, independent transformation on the Navigation
+Context, not a special case bolted onto Filtering.
+
+**1. Scope: title, message, stack, and tags — developer-facing
+textual content, not arbitrary structured payloads.** These are the
+fields a developer reads to understand what happened, or explicitly
+chose as short lookup labels (tags). This is deliberately phrased as a
+principle rather than a fixed field list, so it scales if a future
+event shape adds another human-authored text field without requiring
+a redesign.
+
+**Rejected: also search `metadata`/`context`.** These are open,
+structured key-value data — arbitrary numbers, booleans, nested
+objects, rendered generically by the Inspector. Substring-matching a
+stringified value produces answers with no principled basis (should
+searching `"true"` match every event with any boolean-`true` metadata
+value? should `"3"` match a `retryCount` of `3`, or a stack line
+number, or neither?). Structured fields already have a structured way
+to narrow them — Filtering — and Search deliberately doesn't duplicate
+that with a blunter, textual version of the same capability.
+
+**2. Match semantics: trimmed, case-insensitive substring match on
+the whole query string.** Leading/trailing whitespace is stripped
+before matching, so `"runtime error"` and `" runtime error "` behave
+identically — a small friendliness guarantee that costs nothing and
+keeps the function fully deterministic.
+
+**Rejected: fuzzy matching.** Requires selecting and tuning an
+algorithm (or a dependency) for a need nothing in this project has
+yet demonstrated — the same "no speculative abstraction" reasoning
+that killed `assert.ts`/`now()` in Core.
+**Rejected: regex.** Real footgun (unbounded/backtracking patterns
+from arbitrary developer input) and immediately raises unresolved
+questions with no good default (does `"("` throw? auto-escape?
+silently fail to match?) — that's designing a regex engine, not a
+diagnostics tool.
+**Deferred, not rejected: multi-term AND-token matching** (e.g.
+`"error network"` matching a field containing both words, in either
+order). Genuinely useful eventually; whole-string substring is
+simpler to build and test first, and multi-term search is additive
+later, not a rewrite.
+
+**3. Composition: Search is a second transformation on the Navigation
+Context, applied after Filtering.** This was already committed to
+when Navigation Context was named (see Filtering model, above) —
+Search doesn't need a new decision here, only confirmation that it
+holds:
+
+```text
+Store
+  │
+  ▼
+applyFilters()
+  │
+  ▼
+Navigation Context  (result of filtering)
+  │
+  ▼
+applySearch()
+  │
+  ▼
+Navigation Context  (result of filtering + search)
+  │
+  ▼
+window()
+  │
+  ▼
+Renderer
+```
+
+**4. Engine before controls — stated as an explicit architectural
+principle, not just a build order.** The search engine has no
+knowledge of text inputs, focus, keyboard events, rendering, or
+highlighting. It knows only `applySearch(events, query): DevLensEvent[]`.
+Search *input* (a text field), *match highlighting* (decorating
+matched substrings in rendered rows/inspector text), and *keyboard
+navigation* (traversing the Navigation Context — a Navigation concern,
+not a Search one; explicitly un-bundled from this milestone) are each
+separate, later slices, following the exact engine-then-controls
+sequence Filtering already proved out:
+
+```text
+Search engine  →  Panel integration  →  Search controls  →
+Highlighting  →  Keyboard navigation
+```
+
+Highlighting in particular is two nearly-independent responsibilities
+— Search locates matches and narrows the Navigation Context; rendering
+decorates matched text — and disabling highlighting entirely wouldn't
+change whether Search functions correctly. That independence is the
+signal they're different slices, not one feature.
+
+#### Search invariants
+
+Mirroring the commutativity invariant recorded for Filtering:
+
+- **Pure.** `applySearch(events, query)` takes an event array and a
+  string, returns an event array — no DOM, no renderer, no side
+  effects, same as `applyFilters()`.
+- **Empty query is the identity transformation.** `applySearch(events, "")`
+  (after trimming) returns `events.slice()` — a fresh array, same
+  members, same order. Same philosophy as `applyFilters()`'s
+  no-active-filters fast path.
+- **Order-preserving.** Matching events are returned in their original
+  relative order, same as `applyFilters()`.
+- **Never mutates** either argument.
+- **Idempotent for the same query.** `applySearch(applySearch(events, q), q)`
+  equals `applySearch(events, q)` — searching twice with the same
+  query doesn't continue narrowing anything further, which falls out
+  naturally from being a pure predicate over already-matching events,
+  but is worth stating explicitly the same way commutativity was for
+  Filtering.
+
+### Search controls model — Accepted: no debounce, update on every keystroke, separate component from the toolbar
+
+**1. No debounce.** `setSearchQuery()` is called on every keystroke
+(the input's `input` event), with no delay. `applySearch()`,
+`applyFilters()`, and windowing are all linear scans over in-memory
+arrays bounded by realistic event volumes; recomputing the Navigation
+Context on every character of a five-character query is a handful of
+cheap operations, not a performance concern. Debounce would introduce
+real design questions (how many milliseconds? does Enter bypass it?
+does blur flush it? IME composition?) to solve a problem that doesn't
+exist yet — the same "don't solve tomorrow's performance problem with
+today's complexity" principle that kept `applyFilters()` and
+`applySearch()` free of premature optimization. If DevLens ever
+handles event volumes where this stops being true, that's a windowing/
+indexing problem to solve then, not a reason to add input latency now.
+
+**2. The search box is its own component, not folded into the
+toolbar.** `createSearchBox(onQueryChange)` lives beside
+`createToolbar(onFiltersChange)`, not inside it. They're both filter
+*controls* in the broad sense (both narrow the Navigation Context, both
+sit above the event list, per the Filtering model's placement
+rationale), but they drive independent state (`filters` vs.
+`searchQuery`) through independent seams (`setFilters()` vs.
+`setSearchQuery()`), and mixing them into one component would blur
+that. See ADR-0008's Session 6 amendment for the resulting region
+structure.
+
+**Scope note, mirroring Filtering's engine/controls split: Search
+*presentation* is explicitly not decided here.** Match highlighting
+(in the list, the inspector, or both), a "no results" empty state
+distinct from "nothing selected," and a match count are all
+rendering concerns layered on top of a Navigation Context that's
+already correctly narrowed — the search box above proves the engine
+and controls work without any of them. These get their own short
+design pass before being built, the same way Filter controls got one
+separate from the Filtering engine.
+
 ## User stories
 
 As a developer using an app with DevLens embedded...
@@ -518,11 +672,13 @@ None of the following have been decided. They should be resolved one
 at a time during Session 4 design discussion, not assumed by whoever
 implements first.
 
-- **Search scope:** does search match title/message only, or also
-  stack/metadata/tags? Is it substring match, or something fuzzier?
-- **Keyboard navigation:** are there keyboard shortcuts at all for v1
-  (ADR-0008 explicitly deferred these for the base Panel), and if so,
-  what's the minimal set?
+- **Keyboard navigation:** a Navigation concern, not a Search one (see
+  Search model, decision 4) — traverses whatever the current
+  Navigation Context is, independent of whether narrowing came from a
+  filter, a search, both, or neither. Deliberately sequenced after
+  Search controls/highlighting, not bundled into this milestone. Still
+  open: are there keyboard shortcuts at all for v1 (ADR-0008 explicitly
+  deferred these for the base Panel), and if so, what's the minimal set?
 - **Pause/resume semantics:** does "pause" stop the Store from
   receiving new events, or just stop the Panel from rendering them
   (Store keeps accumulating in the background)? These have different
@@ -571,7 +727,14 @@ Questions surface something that forces revisiting an earlier phase:
   filter state, filter-before-window against the Navigation Context,
   and a checkbox-group toolbar above the event list that calls
   `setFilters()` and nothing else.
-- **Phase 3:** Search. Blocked on the Search scope open question.
+- **Phase 3 — engine and controls complete; presentation not started.**
+  Search model and Search controls model are both decided (see Session
+  4 decisions above): title/message/stack/tags scope, trimmed
+  case-insensitive substring match applied after Filtering, a
+  dedicated search-box component (no debounce) alongside the toolbar.
+  Match highlighting, a distinct "no results" state, and a match count
+  are Search *presentation* — deliberately not scoped to this phase,
+  pending their own short design pass.
 - **Phase 4:** Pause/resume, clear, export/import. Blocked on the
   Pause/resume semantics and Export semantics open questions.
 

@@ -3,20 +3,25 @@ import type { DevLensEvent, EventStore, Plugin } from "@devlens/core";
 import { createOverlay } from "./overlay";
 import { createRenderer } from "./renderer";
 import { createToolbar } from "./components/toolbar";
+import { createSearchBox } from "./components/search-box";
 import { MAX_RENDERED_EVENTS } from "./constants";
 import { applyFilters, createEmptyFilterState, type FilterState } from "./filters";
+import { applySearch } from "./search";
 
 /**
- * Panel's public surface, extended by exactly one seam beyond Plugin:
- * setFilters(). This is the "filter engine becomes load-bearing" step
- * described in docs/specs/inspection.md's Filtering model. The
- * toolbar (below) is a filter *control* — it calls this exact same
- * seam, never the filtering engine directly. See inspection.md's
- * "Scope note: filter engine vs. filter controls" and ADR-0008's
- * Session 5 amendment.
+ * Panel's public surface, extended by two seams beyond Plugin:
+ * setFilters() and setSearchQuery(). These are the "engine becomes
+ * load-bearing" steps described in docs/specs/inspection.md's
+ * Filtering and Search models. The toolbar and search box (below) are
+ * controls — they call setFilters()/setSearchQuery(), never the
+ * filtering/search engines directly. Search *presentation* (match
+ * highlighting, a distinct "no results" state, a match count) is
+ * explicitly not part of this — see inspection.md's Search controls
+ * model scope note and ADR-0008's Session 6 amendment.
  */
 export interface PanelController extends Plugin {
   setFilters(filters: FilterState): void;
+  setSearchQuery(query: string): void;
 }
 
 export function createPanel(store: EventStore): PanelController {
@@ -26,6 +31,7 @@ export function createPanel(store: EventStore): PanelController {
   let renderer: ReturnType<typeof createRenderer> | null = null;
   let selectedEvent: DevLensEvent | null = null;
   let filters: FilterState = createEmptyFilterState();
+  let searchQuery = "";
 
   // Single owner of what "selection" means and how it's applied.
   // Everything that can change selection (clicks today; keyboard
@@ -40,18 +46,20 @@ export function createPanel(store: EventStore): PanelController {
 
   // The Navigation Context (docs/specs/inspection.md): the result of
   // applying every active view-level transformation to the Store's
-  // contents. Only filtering exists today; Search will extend this as
-  // applySearch(applyFilters(...)) without any caller of this function
-  // needing to change. Reads Store/filters, returns a fresh array — no
-  // side effects of its own.
+  // contents, in order — filtering, then search. Each transformation
+  // is independent and pure; adding search here required no change to
+  // any of this function's callers (updateEventList, the click
+  // handler, setFilters/setSearchQuery below) — exactly the payoff the
+  // Filtering model's Navigation Context concept was written to buy.
   function computeNavigationContext(): DevLensEvent[] {
-    return applyFilters(store.getAll(), filters);
+    return applySearch(applyFilters(store.getAll(), filters), searchQuery);
   }
 
-  // The one place the rendered list gets (re)computed. Store updates
-  // and filter changes both funnel through here, so both behave
-  // identically with respect to windowing and selection — there is no
-  // second, parallel "filtered render" path living somewhere else.
+  // The one place the rendered list gets (re)computed. Store updates,
+  // filter changes, and search changes all funnel through here, so all
+  // three behave identically with respect to windowing and selection —
+  // there is no second, parallel "filtered" or "searched" render path
+  // living somewhere else.
   function updateEventList() {
     if (!renderer) return;
 
@@ -62,8 +70,8 @@ export function createPanel(store: EventStore): PanelController {
     // Context (even if it has scrolled beyond MAX_RENDERED_EVENTS —
     // that's handled below, by setSelectedRow() simply finding no
     // matching row); cleared if the Navigation Context no longer
-    // contains it at all, e.g. because an active filter now excludes
-    // it.
+    // contains it at all, e.g. because an active filter or search
+    // query now excludes it.
     if (
       selectedEvent &&
       !navigationContext.some((event) => event.id === selectedEvent!.id)
@@ -93,6 +101,15 @@ export function createPanel(store: EventStore): PanelController {
     updateEventList();
   }
 
+  // Mirrors applyNewFilters() for search: the one place `searchQuery`
+  // is ever assigned. Called by the public setSearchQuery() method and
+  // by the search box's onQueryChange callback — same single-funnel
+  // pattern as filters, and nothing else assigns `searchQuery` directly.
+  function applyNewSearchQuery(newQuery: string) {
+    searchQuery = newQuery;
+    updateEventList();
+  }
+
   return {
     install() {
       if (installed) return;
@@ -100,13 +117,14 @@ export function createPanel(store: EventStore): PanelController {
 
       overlay = createOverlay();
 
-      // Toolbar is mounted before the renderer is created, which is
-      // what puts it first in ShadowRoot DOM order — see ADR-0008's
-      // Session 5 amendment. createRenderer() has no idea this region
-      // exists; it still only manages the two regions from the
-      // Session 4 amendment.
+      // Toolbar and search box are both mounted before the renderer is
+      // created, which is what puts them first in ShadowRoot DOM
+      // order — see ADR-0008's Session 5 and Session 6 amendments.
+      // createRenderer() has no idea either region exists; it still
+      // only manages the two regions from the Session 4 amendment.
       const toolbar = createToolbar(applyNewFilters);
-      overlay.shadowRoot.appendChild(toolbar.element);
+      const searchBox = createSearchBox(applyNewSearchQuery);
+      overlay.shadowRoot.append(toolbar.element, searchBox.element);
 
       renderer = createRenderer(overlay.shadowRoot);
 
@@ -153,9 +171,11 @@ export function createPanel(store: EventStore): PanelController {
       renderer = null;
       selectedEvent = null;
       filters = createEmptyFilterState();
+      searchQuery = "";
       installed = false;
     },
 
     setFilters: applyNewFilters,
+    setSearchQuery: applyNewSearchQuery,
   };
 }

@@ -238,3 +238,43 @@ shape of `FilterState` it needs to construct. See inspection.md's
 "the toolbar shouldn't even know the filtering engine exists"
 principle.
 
+## Amendment (Session 6): search-box region, a sibling of the toolbar, not part of it
+
+Search controls (see `docs/specs/inspection.md`'s "Search controls
+model") add a fourth ShadowRoot region:
+
+```text
+ShadowRoot
+├── [data-devlens-toolbar]      — createToolbar()'s element
+├── [data-devlens-search]       — createSearchBox()'s element (new)
+├── [data-devlens-event-list]   — event rows
+└── [data-devlens-inspector]    — createInspector()'s element
+```
+
+**Decision: the search box is a separate component from the toolbar,
+mounted by `panel.ts` the same way** — created and appended to
+`overlay.shadowRoot` before `createRenderer()` is called, so it lands
+before the event list in DOM order, same as the toolbar. `createRenderer()`
+remains unaware both regions exist.
+
+This is a deliberate non-merge, not an oversight: the toolbar and
+search box both narrow the Navigation Context and both sit above the
+list (per the Filtering model's "filtering changes navigation, not
+inspection" placement rationale), but they drive two independent
+pieces of state — `filters` and `searchQuery` — through two
+independent seams — `setFilters()` and `setSearchQuery()`. Folding
+them into one component would blur that independence for a purely
+cosmetic grouping benefit. If a later redesign wants them visually
+combined, that's a presentation change to how two independent
+components are laid out, not a reason to merge their logic.
+
+**The search box's only outward communication channel is its
+`onQueryChange` callback**, wired to the same internal function
+`setSearchQuery()` calls — identical pattern to the toolbar's
+`onFiltersChange`. It does not import `applySearch()`,
+`computeNavigationContext()`, or the Store.
+
+**Non-goal, still deferred: Search presentation** (match highlighting,
+a distinct "no results" state, a match count). Only the input
+control exists now — see inspection.md's Search controls model scope
+note.

@@ -658,3 +658,301 @@ describe("createPanel toolbar integration", () => {
     panel.uninstall();
   });
 });
+
+describe("createPanel search behavior (Navigation Context)", () => {
+  beforeEach(() => {
+    idCounter = 0;
+  });
+
+  it("behaves identically to no search when setSearchQuery is given an empty string", () => {
+    const store = createFakeStore([
+      makeEvent({ title: "First Event" }),
+      makeEvent({ title: "Second Event" }),
+    ]);
+    const panel = createPanel(store);
+    panel.install();
+
+    panel.setSearchQuery("");
+
+    expect(
+      getPanelRoot()?.querySelectorAll("[data-devlens-event-row]")
+    ).toHaveLength(2);
+
+    panel.uninstall();
+  });
+
+  it("reduces the rendered list to only events matching the search query", () => {
+    const store = createFakeStore([
+      makeEvent({ title: "Timeout connecting to database" }),
+      makeEvent({ title: "Unrelated console message" }),
+      makeEvent({ message: "another timeout, this time on the socket" }),
+    ]);
+    const panel = createPanel(store);
+    panel.install();
+
+    panel.setSearchQuery("timeout");
+
+    const rows = getPanelRoot()?.querySelectorAll("[data-devlens-event-row]");
+    expect(rows).toHaveLength(2);
+
+    panel.uninstall();
+  });
+
+  it("matches case-insensitively and trims whitespace, same as the underlying engine", () => {
+    const store = createFakeStore([makeEvent({ title: "Network Timeout" })]);
+    const panel = createPanel(store);
+    panel.install();
+
+    panel.setSearchQuery("  NETWORK  ");
+
+    expect(
+      getPanelRoot()?.querySelectorAll("[data-devlens-event-row]")
+    ).toHaveLength(1);
+
+    panel.uninstall();
+  });
+
+  it("applies search before windowing to MAX_RENDERED_EVENTS, not within an already-windowed slice", () => {
+    const events = [
+      makeEvent({ title: "The Unique Match" }),
+      ...Array.from({ length: 400 }, (_, i) =>
+        makeEvent({ title: `Filler ${i}` })
+      ),
+    ];
+    const store = createFakeStore(events);
+    const panel = createPanel(store);
+    panel.install();
+
+    panel.setSearchQuery("unique match");
+
+    const titles = Array.from(
+      getPanelRoot()?.querySelectorAll("[data-devlens-event-title]") ?? []
+    ).map((el) => el.textContent);
+    expect(titles).toEqual(["The Unique Match"]);
+
+    panel.uninstall();
+  });
+
+  it("clears selection when the selected event is excluded by a newly-applied search query", () => {
+    const store = createFakeStore([
+      makeEvent({ title: "Selected Event" }),
+      makeEvent({ title: "Other Event" }),
+    ]);
+    const panel = createPanel(store);
+    panel.install();
+
+    const selectedId = store.getAll()[0].id;
+    clickRow(selectedId);
+    expect(
+      getPanelRoot()?.querySelector("[data-devlens-inspector-title]")
+        ?.textContent
+    ).toBe("Selected Event");
+
+    panel.setSearchQuery("other");
+
+    expect(
+      getPanelRoot()?.querySelector("[data-devlens-inspector-empty]")
+    ).not.toBeNull();
+
+    panel.uninstall();
+  });
+
+  it("retains selection when the selected event still matches the active search query", () => {
+    const store = createFakeStore([
+      makeEvent({ title: "Runtime Failure" }),
+      makeEvent({ title: "Console Log" }),
+    ]);
+    const panel = createPanel(store);
+    panel.install();
+
+    const selectedId = store.getAll()[0].id;
+    clickRow(selectedId);
+
+    panel.setSearchQuery("failure");
+
+    expect(
+      getPanelRoot()?.querySelector("[data-devlens-inspector-title]")
+        ?.textContent
+    ).toBe("Runtime Failure");
+
+    panel.uninstall();
+  });
+
+  it("continues respecting the active search query when the Store receives a new event", () => {
+    const store = createFakeStore([makeEvent({ title: "Existing Timeout" })]);
+    const panel = createPanel(store);
+    panel.install();
+
+    panel.setSearchQuery("timeout");
+    store.add(makeEvent({ title: "Unrelated Event" }));
+    store.add(makeEvent({ title: "New Timeout Event" }));
+
+    const titles = Array.from(
+      getPanelRoot()?.querySelectorAll("[data-devlens-event-title]") ?? []
+    ).map((el) => el.textContent);
+    expect(titles).toEqual(["Existing Timeout", "New Timeout Event"]);
+
+    panel.uninstall();
+  });
+
+  it("resets the search query on a fresh install after uninstall", () => {
+    const store = createFakeStore([
+      makeEvent({ title: "Runtime Event" }),
+      makeEvent({ title: "Console Event" }),
+    ]);
+    const panel = createPanel(store);
+
+    panel.install();
+    panel.setSearchQuery("runtime");
+    panel.uninstall();
+
+    panel.install();
+
+    expect(
+      getPanelRoot()?.querySelectorAll("[data-devlens-event-row]")
+    ).toHaveLength(2);
+
+    panel.uninstall();
+  });
+
+  describe("composition with filtering", () => {
+    it("applies search on top of an active filter — both narrow the Navigation Context together", () => {
+      const store = createFakeStore([
+        makeEvent({ title: "Runtime Timeout", category: "runtime" }),
+        makeEvent({ title: "Runtime Success", category: "runtime" }),
+        makeEvent({ title: "Console Timeout", category: "console" }),
+      ]);
+      const panel = createPanel(store);
+      panel.install();
+
+      panel.setFilters({ categories: ["runtime"], severities: [] });
+      panel.setSearchQuery("timeout");
+
+      const titles = Array.from(
+        getPanelRoot()?.querySelectorAll("[data-devlens-event-title]") ?? []
+      ).map((el) => el.textContent);
+      expect(titles).toEqual(["Runtime Timeout"]);
+
+      panel.uninstall();
+    });
+
+    it("re-includes events once the search query is cleared, respecting the still-active filter", () => {
+      const store = createFakeStore([
+        makeEvent({ title: "Runtime Timeout", category: "runtime" }),
+        makeEvent({ title: "Runtime Success", category: "runtime" }),
+        makeEvent({ title: "Console Timeout", category: "console" }),
+      ]);
+      const panel = createPanel(store);
+      panel.install();
+
+      panel.setFilters({ categories: ["runtime"], severities: [] });
+      panel.setSearchQuery("timeout");
+      panel.setSearchQuery("");
+
+      const titles = Array.from(
+        getPanelRoot()?.querySelectorAll("[data-devlens-event-title]") ?? []
+      ).map((el) => el.textContent);
+      expect(titles).toEqual(["Runtime Timeout", "Runtime Success"]);
+
+      panel.uninstall();
+    });
+  });
+});
+
+describe("createPanel search box integration", () => {
+  beforeEach(() => {
+    idCounter = 0;
+  });
+
+  function searchInput(): HTMLInputElement {
+    const el = getPanelRoot()?.querySelector<HTMLInputElement>(
+      "[data-devlens-search-input]"
+    );
+    if (!el) throw new Error("search input not found");
+    return el;
+  }
+
+  function typeIntoSearch(value: string): void {
+    const input = searchInput();
+    input.value = value;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  it("mounts the search box in DOM order after the toolbar and before the event list", () => {
+    const store = createFakeStore();
+    const panel = createPanel(store);
+    panel.install();
+
+    const children = Array.from(getPanelRoot()?.children ?? []);
+    const toolbarIndex = children.findIndex((el) =>
+      el.hasAttribute("data-devlens-toolbar")
+    );
+    const searchIndex = children.findIndex((el) =>
+      el.hasAttribute("data-devlens-search")
+    );
+    const listIndex = children.findIndex((el) =>
+      el.hasAttribute("data-devlens-event-list")
+    );
+
+    expect(toolbarIndex).toBeGreaterThanOrEqual(0);
+    expect(searchIndex).toBeGreaterThan(toolbarIndex);
+    expect(listIndex).toBeGreaterThan(searchIndex);
+
+    panel.uninstall();
+  });
+
+  it("actually typing into the mounted search input narrows the rendered list", () => {
+    const store = createFakeStore([
+      makeEvent({ title: "Network Timeout" }),
+      makeEvent({ title: "Console Log" }),
+    ]);
+    const panel = createPanel(store);
+    panel.install();
+
+    typeIntoSearch("timeout");
+
+    const titles = Array.from(
+      getPanelRoot()?.querySelectorAll("[data-devlens-event-title]") ?? []
+    ).map((el) => el.textContent);
+    expect(titles).toEqual(["Network Timeout"]);
+
+    panel.uninstall();
+  });
+
+  it("clearing the search input restores the previously excluded events", () => {
+    const store = createFakeStore([
+      makeEvent({ title: "Network Timeout" }),
+      makeEvent({ title: "Console Log" }),
+    ]);
+    const panel = createPanel(store);
+    panel.install();
+
+    typeIntoSearch("timeout");
+    typeIntoSearch("");
+
+    const titles = Array.from(
+      getPanelRoot()?.querySelectorAll("[data-devlens-event-title]") ?? []
+    ).map((el) => el.textContent);
+    expect(titles).toEqual(["Network Timeout", "Console Log"]);
+
+    panel.uninstall();
+  });
+
+  it("resets the search box's input value on a fresh install after uninstall", () => {
+    const store = createFakeStore([makeEvent({ title: "Runtime Event" })]);
+    const panel = createPanel(store);
+
+    panel.install();
+    typeIntoSearch("runtime");
+    panel.uninstall();
+
+    panel.install();
+
+    expect(searchInput().value).toBe("");
+    expect(
+      getPanelRoot()?.querySelectorAll("[data-devlens-event-row]")
+    ).toHaveLength(1);
+
+    panel.uninstall();
+  });
+});
