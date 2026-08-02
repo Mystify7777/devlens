@@ -317,8 +317,8 @@ describe("createPanel selection behavior", () => {
       "[data-devlens-event-row]"
     );
     // Same DOM node reference, not a rebuilt one — proves selection
-    // changes don't trigger event-list reconstruction, per ADR-0009's
-    // Panel state model decision.
+    // changes don't trigger event-list reconstruction, per
+    // inspection.md's Panel state model decision.
     expect(rowsAfter?.[0]).toBe(nodeBefore);
 
     panel.uninstall();

@@ -8,8 +8,8 @@ import { createInspector } from "./components/inspector";
  * capabilities rather than a single monolithic render() call.
  *
  * This split matters architecturally, not just stylistically: per
- * ADR-0009's Panel state model decision, selection changes must not
- * trigger event-list reconstruction. A single render(events) entry
+ * inspection.md's Panel state model decision, selection changes must
+ * not trigger event-list reconstruction. A single render(events) entry
  * point would tempt panel.ts into calling the same "rebuild everything"
  * path for both Store updates and selection changes. Splitting the API
  * makes the correct behavior the easy behavior.

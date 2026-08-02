@@ -746,3 +746,8 @@ Noted for later, explicitly out of scope now:
 - Saved filter presets.
 - Timeline/waterfall view (likely belongs to Network capture, not this
   spec).
+- A floating trigger + expand/collapse toggle for the whole Panel
+  (show/hide the entire overlay, not any one region within it). Carried
+  over from ADR-0008's original Non-goals (v1) list; previously tracked
+  only in a stale code comment in `overlay.ts`, moved here during the
+  post-v0.3.0 review pass so it has one real home.
