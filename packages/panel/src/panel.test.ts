@@ -956,3 +956,108 @@ describe("createPanel search box integration", () => {
     panel.uninstall();
   });
 });
+
+describe("createPanel search presentation", () => {
+  beforeEach(() => {
+    idCounter = 0;
+  });
+
+  function searchInput(): HTMLInputElement {
+    const el = getPanelRoot()?.querySelector<HTMLInputElement>(
+      "[data-devlens-search-input]"
+    );
+    if (!el) throw new Error("search input not found");
+    return el;
+  }
+
+  function typeIntoSearch(value: string): void {
+    const input = searchInput();
+    input.value = value;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  it("highlights matches in the rendered rows when typing into the mounted search box", () => {
+    const store = createFakeStore([makeEvent({ title: "Network Timeout" })]);
+    const panel = createPanel(store);
+    panel.install();
+
+    typeIntoSearch("timeout");
+
+    expect(
+      getPanelRoot()?.querySelector("[data-devlens-match]")?.textContent
+    ).toBe("Timeout");
+
+    panel.uninstall();
+  });
+
+  it("highlights matches in the inspector when an event is selected under an active search", () => {
+    const store = createFakeStore([makeEvent({ title: "Network Timeout" })]);
+    const panel = createPanel(store);
+    panel.install();
+
+    typeIntoSearch("timeout");
+    clickRow(store.getAll()[0].id);
+
+    expect(
+      getPanelRoot()?.querySelector(
+        "[data-devlens-inspector-title] [data-devlens-match]"
+      )?.textContent
+    ).toBe("Timeout");
+
+    panel.uninstall();
+  });
+
+  it("shows the Store-empty message when no events have been captured at all", () => {
+    const store = createFakeStore();
+    const panel = createPanel(store);
+    panel.install();
+
+    expect(
+      getPanelRoot()?.querySelector('[data-devlens-event-list-empty="store"]')
+    ).not.toBeNull();
+
+    panel.uninstall();
+  });
+
+  it("shows the filtered-empty message when the Store has events but the active search excludes all of them", () => {
+    const store = createFakeStore([makeEvent({ title: "Console Log" })]);
+    const panel = createPanel(store);
+    panel.install();
+
+    typeIntoSearch("nonexistent");
+
+    expect(
+      getPanelRoot()?.querySelector(
+        '[data-devlens-event-list-empty="filtered"]'
+      )
+    ).not.toBeNull();
+
+    panel.uninstall();
+  });
+
+  it("shows a match count only once search narrows the list, and removes it once cleared", () => {
+    const store = createFakeStore([
+      makeEvent({ title: "Network Timeout" }),
+      makeEvent({ title: "Console Log" }),
+    ]);
+    const panel = createPanel(store);
+    panel.install();
+
+    expect(
+      getPanelRoot()?.querySelector("[data-devlens-event-list-count]")
+    ).toBeNull();
+
+    typeIntoSearch("timeout");
+    expect(
+      getPanelRoot()?.querySelector("[data-devlens-event-list-count]")
+        ?.textContent
+    ).toBe("1 of 2");
+
+    typeIntoSearch("");
+    expect(
+      getPanelRoot()?.querySelector("[data-devlens-event-list-count]")
+    ).toBeNull();
+
+    panel.uninstall();
+  });
+});

@@ -1,4 +1,5 @@
 import type { DevLensEvent } from "@devlens/core";
+import { highlightText } from "../highlight";
 
 /**
  * The Inspector is the persistent side-panel detail view described in
@@ -24,13 +25,21 @@ import type { DevLensEvent } from "@devlens/core";
  * placeholders ("stack: —" etc.) — an event with no stack simply has
  * no stack section.
  *
- * Every value is written via textContent, never innerHTML. Event
- * data (message, stack, metadata values) originates from the host
- * app and must never be interpreted as markup.
+ * Every value is written via textContent or highlightText()'s DOM
+ * fragment, never innerHTML. Event data (message, stack, metadata
+ * values) originates from the host app and must never be interpreted
+ * as markup.
+ *
+ * `searchQuery` highlights matches in title/message/stack/tags — the
+ * same four fields applySearch() itself matches against (see
+ * docs/specs/inspection.md's Search model, decision 1). Severity,
+ * metadata, and context are deliberately never highlighted, because
+ * they're not searchable fields either — highlighting scope always
+ * follows what's actually searched, not just what's rendered.
  */
 export interface Inspector {
   readonly element: HTMLElement;
-  render(event: DevLensEvent | null): void;
+  render(event: DevLensEvent | null, searchQuery: string): void;
 }
 
 export function createInspector(): Inspector {
@@ -50,6 +59,17 @@ export function createInspector(): Inspector {
     const field = document.createElement("div");
     field.setAttribute(`data-devlens-inspector-${name}`, "");
     field.textContent = value;
+    element.appendChild(field);
+  }
+
+  function appendHighlightedField(
+    name: string,
+    value: string,
+    searchQuery: string
+  ) {
+    const field = document.createElement("div");
+    field.setAttribute(`data-devlens-inspector-${name}`, "");
+    field.appendChild(highlightText(value, searchQuery));
     element.appendChild(field);
   }
 
@@ -94,7 +114,7 @@ export function createInspector(): Inspector {
     }
   }
 
-  function appendTags(tags: string[] | undefined) {
+  function appendTags(tags: string[] | undefined, searchQuery: string) {
     if (!tags || tags.length === 0) return;
 
     const section = document.createElement("div");
@@ -103,14 +123,14 @@ export function createInspector(): Inspector {
     for (const tag of tags) {
       const tagEl = document.createElement("span");
       tagEl.setAttribute("data-devlens-inspector-tag", "");
-      tagEl.textContent = tag;
+      tagEl.appendChild(highlightText(tag, searchQuery));
       section.appendChild(tagEl);
     }
 
     element.appendChild(section);
   }
 
-  function render(event: DevLensEvent | null) {
+  function render(event: DevLensEvent | null, searchQuery: string) {
     if (event === null) {
       renderEmptyState();
       return;
@@ -119,16 +139,16 @@ export function createInspector(): Inspector {
     element.replaceChildren();
 
     appendField("severity", event.severity.toUpperCase());
-    appendField("title", event.title);
-    appendField("message", event.message);
+    appendHighlightedField("title", event.title, searchQuery);
+    appendHighlightedField("message", event.message, searchQuery);
 
     if (event.stack) {
-      appendField("stack", event.stack);
+      appendHighlightedField("stack", event.stack, searchQuery);
     }
 
     appendKeyValueSection("metadata", event.metadata);
     appendKeyValueSection("context", event.context);
-    appendTags(event.tags);
+    appendTags(event.tags, searchQuery);
   }
 
   renderEmptyState();

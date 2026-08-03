@@ -39,7 +39,7 @@ describe("createInspector", () => {
 
   it("renders event detail when given an event", () => {
     const inspector = createInspector();
-    inspector.render(makeEvent({ title: "Selected Event" }));
+    inspector.render(makeEvent({ title: "Selected Event" }), "");
 
     expect(
       inspector.element.querySelector("[data-devlens-inspector-title]")
@@ -49,7 +49,7 @@ describe("createInspector", () => {
 
   it("clears the empty state once an event is rendered", () => {
     const inspector = createInspector();
-    inspector.render(makeEvent());
+    inspector.render(makeEvent(), "");
 
     expect(
       inspector.element.querySelector("[data-devlens-inspector-empty]")
@@ -58,8 +58,8 @@ describe("createInspector", () => {
 
   it("returns to the empty state when rendered with null", () => {
     const inspector = createInspector();
-    inspector.render(makeEvent());
-    inspector.render(null);
+    inspector.render(makeEvent(), "");
+    inspector.render(null, "");
 
     expect(
       inspector.element.querySelector("[data-devlens-inspector-empty]")
@@ -72,7 +72,8 @@ describe("createInspector", () => {
   it("renders severity, title, and message for a minimal event", () => {
     const inspector = createInspector();
     inspector.render(
-      makeEvent({ severity: "warn", title: "A Title", message: "A message" })
+      makeEvent({ severity: "warn", title: "A Title", message: "A message" }),
+      ""
     );
 
     expect(
@@ -91,7 +92,7 @@ describe("createInspector", () => {
 
   it("omits the stack section entirely when the event has no stack", () => {
     const inspector = createInspector();
-    inspector.render(makeEvent({ stack: undefined }));
+    inspector.render(makeEvent({ stack: undefined }), "");
 
     expect(
       inspector.element.querySelector("[data-devlens-inspector-stack]")
@@ -100,7 +101,7 @@ describe("createInspector", () => {
 
   it("renders the stack section when the event has one", () => {
     const inspector = createInspector();
-    inspector.render(makeEvent({ stack: "Error: boom\n at line 1" }));
+    inspector.render(makeEvent({ stack: "Error: boom\n at line 1" }), "");
 
     expect(
       inspector.element.querySelector("[data-devlens-inspector-stack]")
@@ -110,7 +111,7 @@ describe("createInspector", () => {
 
   it("omits the metadata section when metadata is absent", () => {
     const inspector = createInspector();
-    inspector.render(makeEvent({ metadata: undefined }));
+    inspector.render(makeEvent({ metadata: undefined }), "");
 
     expect(
       inspector.element.querySelector("[data-devlens-inspector-metadata]")
@@ -119,7 +120,7 @@ describe("createInspector", () => {
 
   it("omits the metadata section when metadata is an empty object", () => {
     const inspector = createInspector();
-    inspector.render(makeEvent({ metadata: {} }));
+    inspector.render(makeEvent({ metadata: {} }), "");
 
     expect(
       inspector.element.querySelector("[data-devlens-inspector-metadata]")
@@ -129,7 +130,8 @@ describe("createInspector", () => {
   it("renders each metadata entry generically, with no hardcoded field names", () => {
     const inspector = createInspector();
     inspector.render(
-      makeEvent({ metadata: { statusCode: 404, url: "/api/widgets" } })
+      makeEvent({ metadata: { statusCode: 404, url: "/api/widgets" } }),
+      ""
     );
 
     const keys = Array.from(
@@ -150,7 +152,8 @@ describe("createInspector", () => {
   it("stringifies non-string metadata values without throwing", () => {
     const inspector = createInspector();
     inspector.render(
-      makeEvent({ metadata: { nested: { retries: 3 }, ok: false } })
+      makeEvent({ metadata: { nested: { retries: 3 }, ok: false } }),
+      ""
     );
 
     const values = Array.from(
@@ -164,7 +167,7 @@ describe("createInspector", () => {
 
   it("omits the context section when context is absent", () => {
     const inspector = createInspector();
-    inspector.render(makeEvent({ context: undefined }));
+    inspector.render(makeEvent({ context: undefined }), "");
 
     expect(
       inspector.element.querySelector("[data-devlens-inspector-context]")
@@ -173,7 +176,7 @@ describe("createInspector", () => {
 
   it("renders context entries the same generic way as metadata", () => {
     const inspector = createInspector();
-    inspector.render(makeEvent({ context: { userAgent: "test-agent" } }));
+    inspector.render(makeEvent({ context: { userAgent: "test-agent" } }), "");
 
     expect(
       inspector.element.querySelector(
@@ -189,7 +192,7 @@ describe("createInspector", () => {
 
   it("omits the tags section when tags is absent", () => {
     const inspector = createInspector();
-    inspector.render(makeEvent({ tags: undefined }));
+    inspector.render(makeEvent({ tags: undefined }), "");
 
     expect(
       inspector.element.querySelector("[data-devlens-inspector-tags]")
@@ -198,7 +201,7 @@ describe("createInspector", () => {
 
   it("omits the tags section when tags is an empty array", () => {
     const inspector = createInspector();
-    inspector.render(makeEvent({ tags: [] }));
+    inspector.render(makeEvent({ tags: [] }), "");
 
     expect(
       inspector.element.querySelector("[data-devlens-inspector-tags]")
@@ -207,7 +210,7 @@ describe("createInspector", () => {
 
   it("renders one tag element per tag, in order", () => {
     const inspector = createInspector();
-    inspector.render(makeEvent({ tags: ["network", "retryable"] }));
+    inspector.render(makeEvent({ tags: ["network", "retryable"] }), "");
 
     const tags = Array.from(
       inspector.element.querySelectorAll("[data-devlens-inspector-tag]")
@@ -218,8 +221,8 @@ describe("createInspector", () => {
 
   it("replaces prior detail rather than appending when rendering a new event", () => {
     const inspector = createInspector();
-    inspector.render(makeEvent({ title: "First" }));
-    inspector.render(makeEvent({ title: "Second" }));
+    inspector.render(makeEvent({ title: "First" }), "");
+    inspector.render(makeEvent({ title: "Second" }), "");
 
     const titles = inspector.element.querySelectorAll(
       "[data-devlens-inspector-title]"
@@ -230,9 +233,7 @@ describe("createInspector", () => {
 
   it("never uses innerHTML — a title containing markup is not parsed as an element", () => {
     const inspector = createInspector();
-    inspector.render(
-      makeEvent({ title: "<img src=x onerror=alert(1)>" })
-    );
+    inspector.render(makeEvent({ title: "<img src=x onerror=alert(1)>" }), "");
 
     const titleEl = inspector.element.querySelector(
       "[data-devlens-inspector-title]"
@@ -244,7 +245,8 @@ describe("createInspector", () => {
   it("never uses innerHTML for metadata values either", () => {
     const inspector = createInspector();
     inspector.render(
-      makeEvent({ metadata: { note: "<script>alert(1)</script>" } })
+      makeEvent({ metadata: { note: "<script>alert(1)</script>" } }),
+      ""
     );
 
     const valueEl = inspector.element.querySelector(
@@ -252,5 +254,111 @@ describe("createInspector", () => {
     );
     expect(valueEl?.textContent).toBe("<script>alert(1)</script>");
     expect(valueEl?.querySelector("script")).toBeNull();
+  });
+
+  describe("search highlighting", () => {
+    it("highlights a matching substring in the title", () => {
+      const inspector = createInspector();
+      inspector.render(makeEvent({ title: "Network Timeout" }), "timeout");
+
+      const titleEl = inspector.element.querySelector(
+        "[data-devlens-inspector-title]"
+      );
+      expect(titleEl?.querySelector("[data-devlens-match]")?.textContent).toBe(
+        "Timeout"
+      );
+      expect(titleEl?.textContent).toBe("Network Timeout");
+    });
+
+    it("highlights a matching substring in the message", () => {
+      const inspector = createInspector();
+      inspector.render(
+        makeEvent({ message: "connection timed out" }),
+        "timed out"
+      );
+
+      const messageEl = inspector.element.querySelector(
+        "[data-devlens-inspector-message]"
+      );
+      expect(
+        messageEl?.querySelector("[data-devlens-match]")?.textContent
+      ).toBe("timed out");
+    });
+
+    it("highlights a matching substring in the stack", () => {
+      const inspector = createInspector();
+      inspector.render(
+        makeEvent({ stack: "at handleClick (app.js:42)" }),
+        "handleClick"
+      );
+
+      const stackEl = inspector.element.querySelector(
+        "[data-devlens-inspector-stack]"
+      );
+      expect(
+        stackEl?.querySelector("[data-devlens-match]")?.textContent
+      ).toBe("handleClick");
+    });
+
+    it("highlights a matching tag", () => {
+      const inspector = createInspector();
+      inspector.render(
+        makeEvent({ tags: ["network", "retryable"] }),
+        "retryable"
+      );
+
+      const tags = inspector.element.querySelectorAll(
+        "[data-devlens-inspector-tag]"
+      );
+      expect(tags[0].querySelector("[data-devlens-match]")).toBeNull();
+      expect(tags[1].querySelector("[data-devlens-match]")?.textContent).toBe(
+        "retryable"
+      );
+    });
+
+    it("does not highlight anything when the query is empty", () => {
+      const inspector = createInspector();
+      inspector.render(makeEvent({ title: "Something Failed" }), "");
+
+      expect(
+        inspector.element.querySelector("[data-devlens-match]")
+      ).toBeNull();
+    });
+
+    it("never highlights severity — severity is not a searchable field", () => {
+      const inspector = createInspector();
+      inspector.render(makeEvent({ severity: "error" }), "error");
+
+      const severityEl = inspector.element.querySelector(
+        "[data-devlens-inspector-severity]"
+      );
+      expect(severityEl?.querySelector("[data-devlens-match]")).toBeNull();
+    });
+
+    it("never highlights metadata values — metadata is not a searchable field", () => {
+      const inspector = createInspector();
+      inspector.render(
+        makeEvent({ metadata: { note: "timeout occurred" } }),
+        "timeout"
+      );
+
+      const valueEl = inspector.element.querySelector(
+        "[data-devlens-inspector-metadata-value]"
+      );
+      expect(valueEl?.querySelector("[data-devlens-match]")).toBeNull();
+    });
+
+    it("never highlights context values — context is not a searchable field", () => {
+      const inspector = createInspector();
+      inspector.render(
+        makeEvent({ context: { note: "timeout occurred" } }),
+        "timeout"
+      );
+
+      const valueEl = inspector.element.querySelector(
+        "[data-devlens-inspector-context-value]"
+      );
+      expect(valueEl?.querySelector("[data-devlens-match]")).toBeNull();
+    });
   });
 });

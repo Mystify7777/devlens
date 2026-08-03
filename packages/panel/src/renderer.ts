@@ -24,9 +24,31 @@ import { createInspector } from "./components/inspector";
  * The renderer still knows nothing about clicks or Panel lifecycle —
  * see docs/adr/0008-panel.md's Session 4 amendment.
  */
+export interface EventListRenderInfo {
+  /** The windowed (MAX_RENDERED_EVENTS-sliced) events to render as rows. */
+  visibleEvents: DevLensEvent[];
+  /** Current search query, for highlighting matches within each row. */
+  searchQuery: string;
+  /**
+   * Full (unwindowed) Navigation Context length — how many events
+   * currently pass filtering + search, before windowing.
+   */
+  navigationContextCount: number;
+  /**
+   * Store's full, unfiltered event count. Compared against
+   * navigationContextCount to decide the empty-state message (Store
+   * empty vs. Navigation Context empty) and whether to show a match
+   * count. Renderer only ever sees these two numbers — never
+   * FilterState, a search query's origin, or the Store itself; Panel
+   * computes both counts and hands them down, same as everything else
+   * this function is given.
+   */
+  totalStoreCount: number;
+}
+
 export interface Renderer {
-  renderEventList(events: DevLensEvent[]): void;
-  renderInspector(event: DevLensEvent | null): void;
+  renderEventList(info: EventListRenderInfo): void;
+  renderInspector(event: DevLensEvent | null, searchQuery: string): void;
   setSelectedRow(eventId: string | null): void;
 }
 
@@ -40,12 +62,59 @@ export function createRenderer(shadowRoot: ShadowRoot): Renderer {
 
   let selectedRowElement: HTMLElement | null = null;
 
+  /**
+   * Three distinct states, per docs/specs/inspection.md's Search
+   * presentation model — "Store empty" and "Navigation Context empty"
+   * are different developer problems and get different messages,
+   * rather than one generic "no events" state that would misleadingly
+   * conflate them.
+   */
+  function renderEmptyListState(kind: "store" | "filtered") {
+    const empty = document.createElement("div");
+    empty.setAttribute("data-devlens-event-list-empty", kind);
+    empty.textContent =
+      kind === "store"
+        ? "No events captured yet."
+        : "No events match the current filter or search.";
+    eventListContainer.appendChild(empty);
+  }
+
   return {
-    renderEventList(events) {
+    renderEventList({
+      visibleEvents,
+      searchQuery,
+      navigationContextCount,
+      totalStoreCount,
+    }) {
       eventListContainer.replaceChildren();
 
-      for (const event of events) {
-        eventListContainer.appendChild(createEventRow(event));
+      if (totalStoreCount === 0) {
+        renderEmptyListState("store");
+        selectedRowElement = null;
+        return;
+      }
+
+      if (navigationContextCount === 0) {
+        renderEmptyListState("filtered");
+        selectedRowElement = null;
+        return;
+      }
+
+      // Match count is shown only when the Navigation Context actually
+      // diverges from the Store's full contents — not whenever a
+      // filter/search value is merely set (an empty filter or a blank
+      // query changes nothing, and showing a count would falsely imply
+      // narrowing is happening). See inspection.md, Search
+      // presentation model, decision 3.
+      if (navigationContextCount !== totalStoreCount) {
+        const count = document.createElement("div");
+        count.setAttribute("data-devlens-event-list-count", "");
+        count.textContent = `${navigationContextCount} of ${totalStoreCount}`;
+        eventListContainer.appendChild(count);
+      }
+
+      for (const event of visibleEvents) {
+        eventListContainer.appendChild(createEventRow(event, searchQuery));
       }
 
       // A fresh render() produces new row elements, so any previously
@@ -54,8 +123,8 @@ export function createRenderer(shadowRoot: ShadowRoot): Renderer {
       selectedRowElement = null;
     },
 
-    renderInspector(event) {
-      inspector.render(event);
+    renderInspector(event, searchQuery) {
+      inspector.render(event, searchQuery);
     },
 
     setSelectedRow(eventId) {

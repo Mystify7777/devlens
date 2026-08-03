@@ -41,7 +41,7 @@ export function createPanel(store: EventStore): PanelController {
   function selectEvent(event: DevLensEvent | null) {
     selectedEvent = event;
     renderer?.setSelectedRow(event?.id ?? null);
-    renderer?.renderInspector(event);
+    renderer?.renderInspector(event, searchQuery);
   }
 
   // The Navigation Context (docs/specs/inspection.md): the result of
@@ -80,7 +80,19 @@ export function createPanel(store: EventStore): PanelController {
     }
 
     const visibleEvents = navigationContext.slice(-MAX_RENDERED_EVENTS);
-    renderer.renderEventList(visibleEvents);
+
+    // totalStoreCount/navigationContextCount are what let the renderer
+    // decide, without ever seeing FilterState, a search query's
+    // origin, or the Store itself, which of the three Search
+    // presentation states applies (Store empty / Navigation Context
+    // empty / normal) and whether a match count belongs on screen —
+    // see docs/specs/inspection.md's Search presentation model.
+    renderer.renderEventList({
+      visibleEvents,
+      searchQuery,
+      navigationContextCount: navigationContext.length,
+      totalStoreCount: store.getAll().length,
+    });
 
     // renderEventList() rebuilds row elements from scratch, so any
     // previously-applied row highlight is gone even if the selected

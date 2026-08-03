@@ -646,6 +646,93 @@ and controls work without any of them. These get their own short
 design pass before being built, the same way Filter controls got one
 separate from the Filtering engine.
 
+### Search presentation model — Accepted: decorate what's already rendered, three-state empty messaging, count on divergence
+
+Three decisions. Unlike every prior Session 4 decision, none of these
+touch state flow — the Navigation Context, Panel state, and the
+engine/controls seams are all unchanged. This is purely about what the
+already-correct data looks like on screen.
+
+**1. Highlight scope: each component decorates only the text it
+already renders — there is no separate decision about which fields to
+highlight.** `event-row.ts` renders severity/title/message today, so
+list highlighting only ever touches title/message. `inspector.ts`
+renders severity/title/message/stack/tags, so all four text fields get
+highlighting there. A match that exists only in an event's stack shows
+no highlight in the list (correct — there's no stack text in a row to
+highlight) but does once the inspector is showing it. This isn't an
+inconsistency to paper over; each component's highlighting scope is a
+direct consequence of its existing rendering scope, not a new,
+independent policy that could drift out of sync with it.
+
+**2. Three distinct states, not two:**
+
+```text
+Store empty                          → "Nothing captured yet."
+Store non-empty, Navigation Context
+  empty (filter/search excludes
+  everything)                        → "Nothing matches the current
+                                         filter or search."
+Navigation Context non-empty         → render the list normally.
+```
+
+**Rejected: one generic "no events" empty state for both cases.**
+Conflating them actively misleads in the second case — a developer
+staring at "no events" when the Store actually holds hundreds is
+exactly the silently-confusing UI the Navigation Context concept was
+built to prevent. The two states require different actions (capture
+some events vs. loosen a filter), so the message should say which.
+
+**3. Show a match count only when the (unwindowed) Navigation Context
+differs from the Store's full contents — not whenever a filter or
+search is "active."** This is a deliberately precise trigger, not
+"any control has a value": `filters = { categories: [], severities: [] }`
+or `searchQuery = ""` are technically "set," but change nothing, and
+showing a count in that case would falsely imply narrowing is
+happening. The correct condition is a direct comparison —
+`navigationContext.length !== store.getAll().length` — tying the
+presentation to what actually changed, not to whether a UI control has
+been touched.
+
+**Rejected: always show a count.** Adds visual noise to the common,
+unfiltered case for a question ("how many am I looking at, out of how
+many total") nobody's asking when nothing is narrowing anything.
+
+#### Where highlighting lives: a pure rendering helper, not per-component logic
+
+`event-row.ts` and `inspector.ts` own *that* they highlight and *which*
+fields; neither owns substring matching, `<mark>` construction, or
+escaping. Those live in one shared function,
+`highlightText(text, query)`, that both components call. This buys two
+things a duplicated implementation wouldn't: changing the highlight
+mechanism (e.g. `<mark>` to a different wrapper element) is a
+one-file change instead of an N-component change, and the matching
+logic gets one focused test suite instead of being re-verified
+per-component.
+
+This is a pure rendering *leaf*, in the same sense `applyFilters()` and
+`applySearch()` are — deterministic output from its inputs, no DOM
+side effects beyond the fragment it returns, no dependency on Panel,
+the Store, or the search engine. It has no idea `applySearch()` exists;
+it receives a query string, not a Navigation Context.
+
+**Invariant: highlighting is purely decorative — it never influences
+matching.** `applySearch()` alone determines which events are in the
+Navigation Context; `highlightText()` only decorates text that's
+already going to be rendered, for events already known to match. There
+is deliberately no path by which highlighting output feeds back into
+search, filtering, or selection. (This is what keeps the two systems
+independently testable and prevents a class of bug where, say,
+inserted markup accidentally changes what a *later* search considers a
+match.)
+
+**Invariant: highlighting preserves text exactly.** Stripping
+`highlightText()`'s output back down to plain text (concatenating
+every text node's content, ignoring the wrapper elements) must equal
+the original input string exactly — no inserted or removed characters,
+no whitespace normalization. Highlighting only ever adds decoration
+around existing text; it never edits the text itself.
+
 ## User stories
 
 As a developer using an app with DevLens embedded...
@@ -727,14 +814,15 @@ Questions surface something that forces revisiting an earlier phase:
   filter state, filter-before-window against the Navigation Context,
   and a checkbox-group toolbar above the event list that calls
   `setFilters()` and nothing else.
-- **Phase 3 — engine and controls complete; presentation not started.**
-  Search model and Search controls model are both decided (see Session
-  4 decisions above): title/message/stack/tags scope, trimmed
+- **Phase 3 — complete.** Search model, Search controls model, and
+  Search presentation model are all decided and implemented (see
+  Session 4 decisions above): title/message/stack/tags scope, trimmed
   case-insensitive substring match applied after Filtering, a
-  dedicated search-box component (no debounce) alongside the toolbar.
-  Match highlighting, a distinct "no results" state, and a match count
-  are Search *presentation* — deliberately not scoped to this phase,
-  pending their own short design pass.
+  dedicated search-box component (no debounce), highlighting via a
+  shared `highlightText()` leaf scoped to whatever each component
+  already renders, three-state empty messaging (Store empty / Navigation
+  Context empty / normal), and a match count shown only when the
+  Navigation Context diverges from the Store's full contents.
 - **Phase 4:** Pause/resume, clear, export/import. Blocked on the
   Pause/resume semantics and Export semantics open questions.
 

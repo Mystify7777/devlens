@@ -1,4 +1,5 @@
 import type { DevLensEvent } from "@devlens/core";
+import { highlightText } from "../highlight";
 
 /**
  * Renders a single row in the event list. Deliberately minimal: one
@@ -19,8 +20,19 @@ import type { DevLensEvent } from "@devlens/core";
  * `data-devlens-event-id` is what makes delegated click handling
  * possible — panel.ts resolves a click back to a real event via this
  * attribute rather than a per-row callback or a parallel WeakMap.
+ *
+ * `searchQuery` highlights matches in title/message only — the two
+ * fields this row renders as text. Per the Search presentation
+ * model's highlight-scope decision (docs/specs/inspection.md), a row
+ * never highlights fields it doesn't display (e.g. stack); that's not
+ * a limitation to work around, it's what "highlight what's rendered"
+ * means. An empty query renders plain text, identical to before
+ * highlighting existed.
  */
-export function createEventRow(event: DevLensEvent): HTMLElement {
+export function createEventRow(
+  event: DevLensEvent,
+  searchQuery: string
+): HTMLElement {
   const row = document.createElement("div");
   row.setAttribute("data-devlens-event-row", "");
   row.setAttribute("data-devlens-event-id", event.id);
@@ -32,11 +44,11 @@ export function createEventRow(event: DevLensEvent): HTMLElement {
 
   const title = document.createElement("span");
   title.setAttribute("data-devlens-event-title", "");
-  title.textContent = event.title;
+  title.appendChild(highlightText(event.title, searchQuery));
 
   const message = document.createElement("span");
   message.setAttribute("data-devlens-event-message", "");
-  message.textContent = event.message;
+  message.appendChild(highlightText(event.message, searchQuery));
 
   row.append(severity, title, message);
 

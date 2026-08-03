@@ -1,7 +1,7 @@
 // packages/panel/src/renderer.test.ts
 import { describe, it, expect, beforeEach } from "vitest";
 import type { DevLensEvent } from "@devlens/core";
-import { createRenderer } from "./renderer";
+import { createRenderer, type EventListRenderInfo } from "./renderer";
 
 let idCounter = 0;
 
@@ -18,6 +18,25 @@ function makeEvent(overrides: Partial<DevLensEvent> = {}): DevLensEvent {
     timestamp: 0,
     ...overrides,
   } satisfies DevLensEvent;
+}
+
+/**
+ * Builds an EventListRenderInfo for the common case — no divergence
+ * between Navigation Context and Store, so neither empty state nor
+ * the count fires. Tests targeting those states override the relevant
+ * counts explicitly.
+ */
+function listInfo(
+  visibleEvents: DevLensEvent[],
+  overrides: Partial<EventListRenderInfo> = {}
+): EventListRenderInfo {
+  return {
+    visibleEvents,
+    searchQuery: "",
+    navigationContextCount: visibleEvents.length,
+    totalStoreCount: visibleEvents.length,
+    ...overrides,
+  };
 }
 
 function createShadowRoot(): ShadowRoot {
@@ -55,7 +74,7 @@ describe("createRenderer", () => {
       const renderer = createRenderer(container);
       const events = [makeEvent(), makeEvent(), makeEvent()];
 
-      renderer.renderEventList(events);
+      renderer.renderEventList(listInfo(events));
 
       expect(
         container.querySelectorAll("[data-devlens-event-row]")
@@ -65,25 +84,14 @@ describe("createRenderer", () => {
     it("clears previous event rows before rendering", () => {
       const renderer = createRenderer(container);
 
-      renderer.renderEventList([makeEvent({ title: "First" })]);
-      renderer.renderEventList([makeEvent({ title: "Second" })]);
+      renderer.renderEventList(listInfo([makeEvent({ title: "First" })]));
+      renderer.renderEventList(listInfo([makeEvent({ title: "Second" })]));
 
       const rows = container.querySelectorAll("[data-devlens-event-row]");
       expect(rows).toHaveLength(1);
       expect(
         container.querySelector("[data-devlens-event-title]")?.textContent
       ).toBe("Second");
-    });
-
-    it("removes existing rows when rendered with an empty array", () => {
-      const renderer = createRenderer(container);
-
-      renderer.renderEventList([makeEvent(), makeEvent()]);
-      renderer.renderEventList([]);
-
-      expect(
-        container.querySelectorAll("[data-devlens-event-row]")
-      ).toHaveLength(0);
     });
 
     it("renders events in input order", () => {
@@ -94,7 +102,7 @@ describe("createRenderer", () => {
         makeEvent({ title: "Gamma" }),
       ];
 
-      renderer.renderEventList(events);
+      renderer.renderEventList(listInfo(events));
 
       const titles = Array.from(
         container.querySelectorAll("[data-devlens-event-title]")
@@ -107,8 +115,8 @@ describe("createRenderer", () => {
       const renderer = createRenderer(container);
       const events = [makeEvent(), makeEvent()];
 
-      renderer.renderEventList(events);
-      renderer.renderEventList(events);
+      renderer.renderEventList(listInfo(events));
+      renderer.renderEventList(listInfo(events));
 
       expect(
         container.querySelectorAll("[data-devlens-event-row]")
@@ -119,18 +127,133 @@ describe("createRenderer", () => {
       // This is the regression test deferred in an earlier revision of
       // this file, back when the renderer owned the whole ShadowRoot
       // as one flat container. Now that renderEventList only touches
-      // [data-devlens-event-list], the inspector (and, if styles.ts
-      // ever injects a <style> tag directly into the ShadowRoot,
-      // that too) survives event-list re-renders untouched.
+      // [data-devlens-event-list], the inspector (and the injected
+      // <style> tag) survives event-list re-renders untouched.
       const renderer = createRenderer(container);
       const inspectorNode = container.querySelector("[data-devlens-inspector]");
 
-      renderer.renderEventList([makeEvent()]);
-      renderer.renderEventList([makeEvent(), makeEvent()]);
+      renderer.renderEventList(listInfo([makeEvent()]));
+      renderer.renderEventList(listInfo([makeEvent(), makeEvent()]));
 
       expect(container.querySelector("[data-devlens-inspector]")).toBe(
         inspectorNode
       );
+    });
+
+    it("highlights matches in rows using the given searchQuery", () => {
+      const renderer = createRenderer(container);
+      const event = makeEvent({ title: "Network Timeout" });
+
+      renderer.renderEventList(
+        listInfo([event], { searchQuery: "timeout" })
+      );
+
+      expect(
+        container.querySelector("[data-devlens-match]")?.textContent
+      ).toBe("Timeout");
+    });
+
+    describe("empty and count states", () => {
+      it("shows the Store-empty message when totalStoreCount is 0", () => {
+        const renderer = createRenderer(container);
+
+        renderer.renderEventList(
+          listInfo([], { totalStoreCount: 0, navigationContextCount: 0 })
+        );
+
+        expect(
+          container.querySelector('[data-devlens-event-list-empty="store"]')
+        ).not.toBeNull();
+        expect(
+          container.querySelectorAll("[data-devlens-event-row]")
+        ).toHaveLength(0);
+      });
+
+      it("shows the filtered-empty message when the Store has events but the Navigation Context is empty", () => {
+        const renderer = createRenderer(container);
+
+        renderer.renderEventList(
+          listInfo([], { totalStoreCount: 5, navigationContextCount: 0 })
+        );
+
+        expect(
+          container.querySelector(
+            '[data-devlens-event-list-empty="filtered"]'
+          )
+        ).not.toBeNull();
+        expect(
+          container.querySelectorAll("[data-devlens-event-row]")
+        ).toHaveLength(0);
+      });
+
+      it("shows neither empty state nor a count when Navigation Context equals the Store", () => {
+        const renderer = createRenderer(container);
+        const events = [makeEvent(), makeEvent()];
+
+        renderer.renderEventList(
+          listInfo(events, {
+            navigationContextCount: events.length,
+            totalStoreCount: events.length,
+          })
+        );
+
+        expect(
+          container.querySelector("[data-devlens-event-list-empty]")
+        ).toBeNull();
+        expect(
+          container.querySelector("[data-devlens-event-list-count]")
+        ).toBeNull();
+      });
+
+      it("shows a count only when Navigation Context diverges from the Store", () => {
+        const renderer = createRenderer(container);
+        const events = [makeEvent(), makeEvent()];
+
+        renderer.renderEventList(
+          listInfo(events, { navigationContextCount: 2, totalStoreCount: 340 })
+        );
+
+        expect(
+          container.querySelector("[data-devlens-event-list-count]")
+            ?.textContent
+        ).toBe("2 of 340");
+      });
+
+      it("does not show a count when the query/filter is set but changes nothing (Navigation Context still equals the Store)", () => {
+        const renderer = createRenderer(container);
+        const events = [makeEvent(), makeEvent()];
+
+        // Same length on both sides — nothing was actually excluded,
+        // even though a caller might have "technically" set a filter
+        // that matched everything.
+        renderer.renderEventList(
+          listInfo(events, {
+            searchQuery: "log",
+            navigationContextCount: events.length,
+            totalStoreCount: events.length,
+          })
+        );
+
+        expect(
+          container.querySelector("[data-devlens-event-list-count]")
+        ).toBeNull();
+      });
+
+      it("clears an empty state on a subsequent render with matching events", () => {
+        const renderer = createRenderer(container);
+
+        renderer.renderEventList(
+          listInfo([], { totalStoreCount: 5, navigationContextCount: 0 })
+        );
+        renderer.renderEventList(listInfo([makeEvent()]));
+
+        expect(
+          container.querySelector("[data-devlens-event-list-empty]")
+        ).toBeNull();
+        expect(
+          container.querySelectorAll("[data-devlens-event-row]")
+        ).toHaveLength(1);
+      });
     });
   });
 
@@ -138,7 +261,7 @@ describe("createRenderer", () => {
     it("renders event detail into the inspector region", () => {
       const renderer = createRenderer(container);
 
-      renderer.renderInspector(makeEvent({ title: "Selected Event" }));
+      renderer.renderInspector(makeEvent({ title: "Selected Event" }), "");
 
       expect(
         container.querySelector("[data-devlens-inspector-title]")?.textContent
@@ -148,8 +271,8 @@ describe("createRenderer", () => {
     it("returns the inspector to its empty state when passed null", () => {
       const renderer = createRenderer(container);
 
-      renderer.renderInspector(makeEvent());
-      renderer.renderInspector(null);
+      renderer.renderInspector(makeEvent(), "");
+      renderer.renderInspector(null, "");
 
       expect(
         container.querySelector("[data-devlens-inspector-empty]")
@@ -159,12 +282,29 @@ describe("createRenderer", () => {
     it("does not affect the event list", () => {
       const renderer = createRenderer(container);
 
-      renderer.renderEventList([makeEvent({ title: "Row Event" })]);
-      renderer.renderInspector(makeEvent({ title: "Different Selected Event" }));
+      renderer.renderEventList(listInfo([makeEvent({ title: "Row Event" })]));
+      renderer.renderInspector(
+        makeEvent({ title: "Different Selected Event" }),
+        ""
+      );
 
       expect(
         container.querySelector("[data-devlens-event-title]")?.textContent
       ).toBe("Row Event");
+    });
+
+    it("highlights matches in the inspector using the given searchQuery", () => {
+      const renderer = createRenderer(container);
+
+      renderer.renderInspector(
+        makeEvent({ title: "Network Timeout" }),
+        "timeout"
+      );
+
+      expect(
+        container.querySelector("[data-devlens-inspector-title] [data-devlens-match]")
+          ?.textContent
+      ).toBe("Timeout");
     });
   });
 
@@ -172,7 +312,7 @@ describe("createRenderer", () => {
     it("adds data-selected to the matching row", () => {
       const renderer = createRenderer(container);
       const events = [makeEvent(), makeEvent()];
-      renderer.renderEventList(events);
+      renderer.renderEventList(listInfo(events));
 
       renderer.setSelectedRow(events[1].id);
 
@@ -184,7 +324,7 @@ describe("createRenderer", () => {
     it("moves the selection when called again with a different id", () => {
       const renderer = createRenderer(container);
       const events = [makeEvent(), makeEvent()];
-      renderer.renderEventList(events);
+      renderer.renderEventList(listInfo(events));
 
       renderer.setSelectedRow(events[0].id);
       renderer.setSelectedRow(events[1].id);
@@ -197,7 +337,7 @@ describe("createRenderer", () => {
     it("clears the selection when called with null", () => {
       const renderer = createRenderer(container);
       const events = [makeEvent()];
-      renderer.renderEventList(events);
+      renderer.renderEventList(listInfo(events));
 
       renderer.setSelectedRow(events[0].id);
       renderer.setSelectedRow(null);
@@ -211,7 +351,7 @@ describe("createRenderer", () => {
 
     it("does nothing (no throw) when the id has no matching row", () => {
       const renderer = createRenderer(container);
-      renderer.renderEventList([makeEvent()]);
+      renderer.renderEventList(listInfo([makeEvent()]));
 
       expect(() => renderer.setSelectedRow("no-such-id")).not.toThrow();
     });
@@ -224,10 +364,10 @@ describe("createRenderer", () => {
       // every list rebuild, not an accident of stale references.
       const renderer = createRenderer(container);
       const event = makeEvent();
-      renderer.renderEventList([event]);
+      renderer.renderEventList(listInfo([event]));
       renderer.setSelectedRow(event.id);
 
-      renderer.renderEventList([event]);
+      renderer.renderEventList(listInfo([event]));
 
       expect(
         container.querySelector("[data-devlens-event-row]")?.hasAttribute(
