@@ -1061,3 +1061,271 @@ describe("createPanel search presentation", () => {
     panel.uninstall();
   });
 });
+describe("createPanel keyboard navigation", () => {
+  beforeEach(() => {
+    idCounter = 0;
+  });
+
+  function eventListElement(): HTMLElement {
+    const el = getPanelRoot()?.querySelector<HTMLElement>(
+      "[data-devlens-event-list]"
+    );
+    if (!el) throw new Error("event list not found");
+    return el;
+  }
+
+  function pressKey(key: string, target: HTMLElement): void {
+    target.dispatchEvent(
+      new KeyboardEvent("keydown", { key, bubbles: true, composed: true })
+    );
+  }
+
+  function selectedTitle(): string | null | undefined {
+    return getPanelRoot()?.querySelector("[data-devlens-inspector-title]")
+      ?.textContent;
+  }
+
+  it("does nothing when the event list does not have focus", () => {
+    const store = createFakeStore([makeEvent({ title: "First" })]);
+    const panel = createPanel(store);
+    panel.install();
+
+    // No .focus() call — the list never receives focus.
+    pressKey("ArrowDown", eventListElement());
+
+    expect(
+      getPanelRoot()?.querySelector("[data-devlens-inspector-empty]")
+    ).not.toBeNull();
+
+    panel.uninstall();
+  });
+
+  it("selects the first row on ArrowDown with the list focused and nothing selected", () => {
+    const store = createFakeStore([
+      makeEvent({ title: "First" }),
+      makeEvent({ title: "Second" }),
+    ]);
+    const panel = createPanel(store);
+    panel.install();
+
+    const list = eventListElement();
+    list.focus();
+    pressKey("ArrowDown", list);
+
+    expect(selectedTitle()).toBe("First");
+
+    panel.uninstall();
+  });
+
+  it("also selects the first row on ArrowUp with the list focused and nothing selected — not the last", () => {
+    const store = createFakeStore([
+      makeEvent({ title: "First" }),
+      makeEvent({ title: "Second" }),
+    ]);
+    const panel = createPanel(store);
+    panel.install();
+
+    const list = eventListElement();
+    list.focus();
+    pressKey("ArrowUp", list);
+
+    expect(selectedTitle()).toBe("First");
+
+    panel.uninstall();
+  });
+
+  it("moves to the next row on ArrowDown from a selected row", () => {
+    const store = createFakeStore([
+      makeEvent({ title: "First" }),
+      makeEvent({ title: "Second" }),
+      makeEvent({ title: "Third" }),
+    ]);
+    const panel = createPanel(store);
+    panel.install();
+
+    const list = eventListElement();
+    list.focus();
+    pressKey("ArrowDown", list);
+    pressKey("ArrowDown", list);
+
+    expect(selectedTitle()).toBe("Second");
+
+    panel.uninstall();
+  });
+
+  it("moves to the previous row on ArrowUp from a selected row", () => {
+    const store = createFakeStore([
+      makeEvent({ title: "First" }),
+      makeEvent({ title: "Second" }),
+      makeEvent({ title: "Third" }),
+    ]);
+    const panel = createPanel(store);
+    panel.install();
+
+    const list = eventListElement();
+    list.focus();
+    clickRow(store.getAll()[2].id); // select Third
+    pressKey("ArrowUp", list);
+
+    expect(selectedTitle()).toBe("Second");
+
+    panel.uninstall();
+  });
+
+  it("stops on the last row — ArrowDown past the end does not wrap to the first", () => {
+    const store = createFakeStore([
+      makeEvent({ title: "First" }),
+      makeEvent({ title: "Second" }),
+    ]);
+    const panel = createPanel(store);
+    panel.install();
+
+    const list = eventListElement();
+    list.focus();
+    clickRow(store.getAll()[1].id); // select Second (last)
+    pressKey("ArrowDown", list);
+
+    expect(selectedTitle()).toBe("Second");
+
+    panel.uninstall();
+  });
+
+  it("stops on the first row — ArrowUp past the start does not wrap to the last", () => {
+    const store = createFakeStore([
+      makeEvent({ title: "First" }),
+      makeEvent({ title: "Second" }),
+    ]);
+    const panel = createPanel(store);
+    panel.install();
+
+    const list = eventListElement();
+    list.focus();
+    clickRow(store.getAll()[0].id); // select First
+    pressKey("ArrowUp", list);
+
+    expect(selectedTitle()).toBe("First");
+
+    panel.uninstall();
+  });
+
+  it("Home selects the first row regardless of current selection", () => {
+    const store = createFakeStore([
+      makeEvent({ title: "First" }),
+      makeEvent({ title: "Second" }),
+      makeEvent({ title: "Third" }),
+    ]);
+    const panel = createPanel(store);
+    panel.install();
+
+    const list = eventListElement();
+    list.focus();
+    clickRow(store.getAll()[2].id);
+    pressKey("Home", list);
+
+    expect(selectedTitle()).toBe("First");
+
+    panel.uninstall();
+  });
+
+  it("End selects the last row regardless of current selection", () => {
+    const store = createFakeStore([
+      makeEvent({ title: "First" }),
+      makeEvent({ title: "Second" }),
+      makeEvent({ title: "Third" }),
+    ]);
+    const panel = createPanel(store);
+    panel.install();
+
+    const list = eventListElement();
+    list.focus();
+    clickRow(store.getAll()[0].id);
+    pressKey("End", list);
+
+    expect(selectedTitle()).toBe("Third");
+
+    panel.uninstall();
+  });
+
+  it("stops navigating once focus moves to the search box", () => {
+    const store = createFakeStore([
+      makeEvent({ title: "First" }),
+      makeEvent({ title: "Second" }),
+    ]);
+    const panel = createPanel(store);
+    panel.install();
+
+    const list = eventListElement();
+    list.focus();
+    clickRow(store.getAll()[0].id);
+
+    const searchInput = getPanelRoot()?.querySelector<HTMLInputElement>(
+      "[data-devlens-search-input]"
+    );
+    searchInput?.focus();
+    pressKey("ArrowDown", searchInput!);
+
+    // Selection unchanged — still "First", not "Second".
+    expect(selectedTitle()).toBe("First");
+
+    panel.uninstall();
+  });
+
+  it("does nothing (no throw) when the list is focused but there are no events", () => {
+    const store = createFakeStore();
+    const panel = createPanel(store);
+    panel.install();
+
+    const list = eventListElement();
+    list.focus();
+
+    expect(() => pressKey("ArrowDown", list)).not.toThrow();
+    expect(
+      getPanelRoot()?.querySelector("[data-devlens-inspector-empty]")
+    ).not.toBeNull();
+
+    panel.uninstall();
+  });
+
+  it("navigates only the currently filtered/searched rows, not the full Store", () => {
+    const store = createFakeStore([
+      makeEvent({ title: "Runtime One", category: "runtime" }),
+      makeEvent({ title: "Console Event", category: "console" }),
+      makeEvent({ title: "Runtime Two", category: "runtime" }),
+    ]);
+    const panel = createPanel(store);
+    panel.install();
+
+    panel.setFilters({ categories: ["runtime"], severities: [] });
+
+    const list = eventListElement();
+    list.focus();
+    pressKey("ArrowDown", list);
+    expect(selectedTitle()).toBe("Runtime One");
+
+    pressKey("ArrowDown", list);
+    expect(selectedTitle()).toBe("Runtime Two");
+
+    panel.uninstall();
+  });
+
+  it("clears selection via the existing persistence rule if a filter excludes the keyboard-selected event", () => {
+    const store = createFakeStore([
+      makeEvent({ title: "Runtime Event", category: "runtime" }),
+      makeEvent({ title: "Console Event", category: "console" }),
+    ]);
+    const panel = createPanel(store);
+    panel.install();
+
+    const list = eventListElement();
+    list.focus();
+    pressKey("ArrowDown", list); // selects Runtime Event
+
+    panel.setFilters({ categories: ["console"], severities: [] });
+
+    expect(
+      getPanelRoot()?.querySelector("[data-devlens-inspector-empty]")
+    ).not.toBeNull();
+
+    panel.uninstall();
+  });
+});

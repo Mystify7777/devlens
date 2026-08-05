@@ -55,12 +55,36 @@ export interface Renderer {
 export function createRenderer(shadowRoot: ShadowRoot): Renderer {
   const eventListContainer = document.createElement("div");
   eventListContainer.setAttribute("data-devlens-event-list", "");
+  // Focusable, so keyboard navigation (docs/specs/inspection.md,
+  // Keyboard navigation model) has something to scope arrow-key
+  // handling to — Panel checks focus containment before treating a
+  // keydown as list navigation, rather than the Panel ever
+  // intercepting arrow keys globally.
+  eventListContainer.setAttribute("tabindex", "0");
 
   const inspector = createInspector();
 
   shadowRoot.append(eventListContainer, inspector.element);
 
   let selectedRowElement: HTMLElement | null = null;
+
+  /**
+   * Scrolling the selected row into view is a *consequence* of
+   * selection, not part of what selection means — deliberately not a
+   * public method on Renderer (see inspection.md, "Where scrolling
+   * lives"). setSelectedRow()'s contract is unchanged; this is purely
+   * an internal detail callers never need to know about.
+   *
+   * Guarded because scrollIntoView isn't implemented in every
+   * environment (notably jsdom, used by this file's own tests) — same
+   * defensive pattern as the CSS.escape() check in setSelectedRow
+   * below.
+   */
+  function ensureRowVisible(row: HTMLElement) {
+    if (typeof row.scrollIntoView === "function") {
+      row.scrollIntoView({ block: "nearest" });
+    }
+  }
 
   /**
    * Three distinct states, per docs/specs/inspection.md's Search
@@ -151,6 +175,7 @@ export function createRenderer(shadowRoot: ShadowRoot): Renderer {
 
       row.setAttribute("data-selected", "");
       selectedRowElement = row;
+      ensureRowVisible(row);
     },
   };
 }

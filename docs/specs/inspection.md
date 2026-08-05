@@ -733,6 +733,105 @@ the original input string exactly — no inserted or removed characters,
 no whitespace normalization. Highlighting only ever adds decoration
 around existing text; it never edits the text itself.
 
+### Keyboard navigation model — Accepted: reuses selectEvent(), traverses the rendered portion of the Navigation Context, stops at ends
+
+The first feature to treat the Navigation Context as an **ordered
+sequence to move through**, rather than a set to narrow (Filtering,
+Search) or a single member to inspect (Selection). Six decisions.
+
+**1. No separate `focusedEvent` state — arrow keys call the exact same
+`selectEvent()` clicks already call.** Selection is single-select with
+no draft/commit step (the same reasoning that rejected a Filter
+controls "Apply" button); there is no product need for "arrow to
+preview, Enter to commit" that a focus/selection split exists to
+serve. Introducing one now would immediately raise questions with no
+good answer — what happens if filtering removes the focused item but
+not the selected one? which one highlights? which one does the
+inspector show? — that only exist because of the invented state.
+Rejected outright, not deferred.
+
+**2. Traversal scope, precisely worded: keyboard navigation traverses
+the currently *rendered* portion of the Navigation Context — not "the
+Navigation Context" unqualified, and not "the rendered window" as an
+independent concept.** The Navigation Context is still the thing being
+navigated, conceptually; today's renderer just exposes only a window
+of it (`MAX_RENDERED_EVENTS`). Phrasing it this way leaves room for a
+future virtualized renderer (showing a different window without
+changing what "navigating" means) without redefining this decision.
+Practically: "next"/"previous" only ever move between rows that
+actually exist in the DOM.
+
+**3. Stop at the ends — no wraparound.** Pressing "next" on the last
+row does nothing (stays put), same for "previous" on the first.
+
+**Rejected: wrapping from last back to first (or vice versa).** Some
+list widgets do this, but it risks a silent, disorienting jump — press
+"next" enough times and you're back at the top with no signal a loop
+happened. Stopping is the less surprising default and trivial to test
+(`first + previous → still first`; `last + next → still last`).
+Wraparound is easy to add later if it's ever actually missed.
+
+**4. With no current selection, both "next" and "previous" select the
+first visible row — not "next selects first, previous selects last."**
+There is no current position to move relative to, so falling back to
+the first row is the deterministic choice for either direction.
+Defaulting "previous" to the *last* row would be asymmetric behavior a
+developer has no way to anticipate the first time they press an arrow
+key with nothing selected.
+
+**5. Home/End are supported (jump to first/last visible row);
+PageUp/PageDown are not.** Home/End cost almost nothing once arrow-key
+traversal exists — they're the same "jump to an end" operation arrow
+keys already need for the stop-at-ends rule. PageUp/PageDown are
+deferred because they depend on scroll-viewport math (how many rows
+constitute a "page") that doesn't have a settled answer yet and isn't
+needed for Home/End to work.
+
+**6. Traversal is strictly linear — index±1 over the rendered
+ordering, never "skip to the next match" or any other semantic
+jump.** `ArrowDown` from row N always goes to row N+1 in the rendered
+list, full stop. This is deliberately boring, the same way
+`applyFilters()`/`applySearch()` are boring: a developer's mental model
+of "the list, top to bottom" should never be second-guessed by the
+navigation implementation.
+
+#### Scope: navigation is active only while the event list has focus
+
+The Panel must never intercept arrow keys globally — that would steal
+keyboard input from the host page, unacceptable for an embedded tool.
+Concretely: the event list container is focusable (`tabindex`), and
+the keydown listener only acts when focus is currently somewhere
+inside that region. The moment focus moves to the search box, the
+inspector, or outside the Panel entirely, arrow keys stop navigating
+events and do whatever they'd otherwise do (e.g. move the text cursor
+in the search box). This is also the first concrete answer to
+ADR-0008's originally-deferred "appropriate accessibility semantics for
+a live, updating list" intent — a roving-focus-adjacent pattern, not a
+global keyboard shortcut.
+
+#### Where scrolling lives: an internal consequence of selection, not a new public method
+
+Keeping the selected row visible on screen is necessary once keyboard
+navigation exists (arrowing past the visible viewport with nothing
+scrolling into view would be unusable) but is deliberately **not** a
+new method on `Renderer`. `setSelectedRow()`'s public contract is
+unchanged; internally, after applying the `data-selected` highlight, it
+calls a private helper that scrolls the row into view if needed.
+Scrolling is a *consequence* of selection, not part of what selection
+*means* — keeping it as an internal implementation detail means future
+changes (scroll only if outside the viewport vs. always scroll to a
+fixed position, an animated scroll, etc.) never touch the public API
+or any caller.
+
+#### Filter/Search interaction: no new rule needed
+
+The existing Selection persistence rule (Selection model, above)
+already fully covers this: a keyboard-selected event is retained if
+still present in the Navigation Context, cleared if a filter or search
+change excludes it. Keyboard navigation doesn't add a new rule here,
+it inherits this one for free — worth stating explicitly so it isn't
+left as an unstated assumption.
+
 ## User stories
 
 As a developer using an app with DevLens embedded...
@@ -759,13 +858,6 @@ None of the following have been decided. They should be resolved one
 at a time during Session 4 design discussion, not assumed by whoever
 implements first.
 
-- **Keyboard navigation:** a Navigation concern, not a Search one (see
-  Search model, decision 4) — traverses whatever the current
-  Navigation Context is, independent of whether narrowing came from a
-  filter, a search, both, or neither. Deliberately sequenced after
-  Search controls/highlighting, not bundled into this milestone. Still
-  open: are there keyboard shortcuts at all for v1 (ADR-0008 explicitly
-  deferred these for the base Panel), and if so, what's the minimal set?
 - **Pause/resume semantics:** does "pause" stop the Store from
   receiving new events, or just stop the Panel from rendering them
   (Store keeps accumulating in the background)? These have different
@@ -823,6 +915,14 @@ Questions surface something that forces revisiting an earlier phase:
   already renders, three-state empty messaging (Store empty / Navigation
   Context empty / normal), and a match count shown only when the
   Navigation Context diverges from the Store's full contents.
+- **Phase 3.5 — decided, ready for implementation.** Keyboard
+  navigation model is decided (see Session 4 decisions above): arrow
+  keys reuse `selectEvent()` directly (no separate focus state), linear
+  traversal of the rendered portion of the Navigation Context, stop at
+  ends (no wraparound), no-selection defaults to the first visible row
+  for either direction, Home/End supported, active only while the
+  event list has focus, scrolling handled internally by
+  `setSelectedRow()` with no public API change.
 - **Phase 4:** Pause/resume, clear, export/import. Blocked on the
   Pause/resume semantics and Export semantics open questions.
 
@@ -839,3 +939,10 @@ Noted for later, explicitly out of scope now:
   over from ADR-0008's original Non-goals (v1) list; previously tracked
   only in a stale code comment in `overlay.ts`, moved here during the
   post-v0.3.0 review pass so it has one real home.
+- PageUp/PageDown for keyboard navigation — deferred pending settled
+  scroll-viewport/"page size" semantics; Home/End cover the common
+  jump-to-end cases without needing this.
+- Wraparound for keyboard navigation (next past the last row jumps to
+  the first, or vice versa) — deliberately rejected for v1 in favor of
+  stopping at the ends; revisit only if this is actually missed in
+  practice.

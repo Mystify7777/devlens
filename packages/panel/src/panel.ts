@@ -7,6 +7,7 @@ import { createSearchBox } from "./components/search-box";
 import { MAX_RENDERED_EVENTS } from "./constants";
 import { applyFilters, createEmptyFilterState, type FilterState } from "./filters";
 import { applySearch } from "./search";
+import { computeNavigationTarget, type NavigationDirection } from "./navigation";
 
 /**
  * Panel's public surface, extended by two seams beyond Plugin:
@@ -18,11 +19,23 @@ import { applySearch } from "./search";
  * highlighting, a distinct "no results" state, a match count) is
  * explicitly not part of this — see inspection.md's Search controls
  * model scope note and ADR-0008's Session 6 amendment.
+ *
+ * Keyboard navigation (arrow keys, Home/End) reuses selectEvent()
+ * directly — there is deliberately no separate seam for it, since it
+ * drives the exact same state transition a click does. See
+ * inspection.md's Keyboard navigation model.
  */
 export interface PanelController extends Plugin {
   setFilters(filters: FilterState): void;
   setSearchQuery(query: string): void;
 }
+
+const NAVIGATION_KEYS: Record<string, NavigationDirection> = {
+  ArrowDown: "next",
+  ArrowUp: "previous",
+  Home: "first",
+  End: "last",
+};
 
 export function createPanel(store: EventStore): PanelController {
   let installed = false;
@@ -32,12 +45,19 @@ export function createPanel(store: EventStore): PanelController {
   let selectedEvent: DevLensEvent | null = null;
   let filters: FilterState = createEmptyFilterState();
   let searchQuery = "";
+  // The currently rendered rows — kept in sync by updateEventList() on
+  // every Store/filter/search change. Keyboard navigation traverses
+  // this directly rather than recomputing filters/search on every
+  // keypress; see inspection.md's Keyboard navigation model, decision 2
+  // ("traverses the currently rendered portion of the Navigation
+  // Context").
+  let currentVisibleEvents: DevLensEvent[] = [];
 
   // Single owner of what "selection" means and how it's applied.
-  // Everything that can change selection (clicks today; keyboard
-  // navigation later; Navigation Context invalidation below) goes
-  // through this, rather than each caller remembering to update both
-  // the row highlight and the inspector separately.
+  // Everything that can change selection (clicks, keyboard navigation
+  // below, Navigation Context invalidation below) goes through this,
+  // rather than each caller remembering to update both the row
+  // highlight and the inspector separately.
   function selectEvent(event: DevLensEvent | null) {
     selectedEvent = event;
     renderer?.setSelectedRow(event?.id ?? null);
@@ -80,6 +100,7 @@ export function createPanel(store: EventStore): PanelController {
     }
 
     const visibleEvents = navigationContext.slice(-MAX_RENDERED_EVENTS);
+    currentVisibleEvents = visibleEvents;
 
     // totalStoreCount/navigationContextCount are what let the renderer
     // decide, without ever seeing FilterState, a search query's
@@ -162,6 +183,34 @@ export function createPanel(store: EventStore): PanelController {
         selectEvent(clickedEvent);
       });
 
+      // Keyboard navigation (inspection.md, Keyboard navigation model).
+      // Scoped to focus within the event list region — the Panel must
+      // never intercept arrow keys globally, so a keydown only becomes
+      // navigation if shadowRoot.activeElement is currently inside
+      // [data-devlens-event-list] (the renderer makes that container
+      // focusable via tabindex for exactly this purpose). The moment
+      // focus moves to the search box, the inspector, or outside the
+      // Panel, these keys do whatever they'd otherwise do.
+      overlay.shadowRoot.addEventListener("keydown", (domEvent) => {
+        if (!(domEvent instanceof KeyboardEvent)) return;
+
+        const direction = NAVIGATION_KEYS[domEvent.key];
+        if (!direction) return;
+
+        const activeElement = overlay?.shadowRoot.activeElement;
+        if (!activeElement?.closest("[data-devlens-event-list]")) return;
+
+        const target = computeNavigationTarget(
+          currentVisibleEvents,
+          selectedEvent?.id ?? null,
+          direction
+        );
+        if (!target) return;
+
+        domEvent.preventDefault();
+        selectEvent(target);
+      });
+
       unsubscribe = store.subscribe(() => {
         updateEventList();
       });
@@ -184,6 +233,7 @@ export function createPanel(store: EventStore): PanelController {
       selectedEvent = null;
       filters = createEmptyFilterState();
       searchQuery = "";
+      currentVisibleEvents = [];
       installed = false;
     },
 

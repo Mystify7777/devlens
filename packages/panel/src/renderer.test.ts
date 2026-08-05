@@ -1,5 +1,5 @@
 // packages/panel/src/renderer.test.ts
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import type { DevLensEvent } from "@devlens/core";
 import { createRenderer, type EventListRenderInfo } from "./renderer";
 
@@ -308,6 +308,16 @@ describe("createRenderer", () => {
     });
   });
 
+  it("makes the event list container focusable, for keyboard navigation to scope to", () => {
+    createRenderer(container);
+
+    expect(
+      container
+        .querySelector("[data-devlens-event-list]")
+        ?.getAttribute("tabindex")
+    ).toBe("0");
+  });
+
   describe("setSelectedRow", () => {
     it("adds data-selected to the matching row", () => {
       const renderer = createRenderer(container);
@@ -374,6 +384,57 @@ describe("createRenderer", () => {
           "data-selected"
         )
       ).toBe(false);
+    });
+
+    describe("scrolling the selected row into view", () => {
+      it("does not throw when scrollIntoView isn't implemented (e.g. jsdom, by default)", () => {
+        const renderer = createRenderer(container);
+        const event = makeEvent();
+        renderer.renderEventList(listInfo([event]));
+
+        expect(() => renderer.setSelectedRow(event.id)).not.toThrow();
+      });
+
+      it("calls scrollIntoView({ block: 'nearest' }) on the selected row when available", () => {
+        const scrollIntoView = vi.fn();
+        // jsdom doesn't implement scrollIntoView at all; stub it for
+        // this test only, restored via vi.restoreAllMocks() below.
+        Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+          value: scrollIntoView,
+          configurable: true,
+          writable: true,
+        });
+
+        const renderer = createRenderer(container);
+        const events = [makeEvent(), makeEvent()];
+        renderer.renderEventList(listInfo(events));
+
+        renderer.setSelectedRow(events[1].id);
+
+        expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
+
+        // @ts-expect-error — cleaning up the stub, not part of the type
+        delete HTMLElement.prototype.scrollIntoView;
+      });
+
+      it("does not scroll when setSelectedRow is called with null", () => {
+        const scrollIntoView = vi.fn();
+        Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+          value: scrollIntoView,
+          configurable: true,
+          writable: true,
+        });
+
+        const renderer = createRenderer(container);
+        renderer.renderEventList(listInfo([makeEvent()]));
+
+        renderer.setSelectedRow(null);
+
+        expect(scrollIntoView).not.toHaveBeenCalled();
+
+        // @ts-expect-error — cleaning up the stub, not part of the type
+        delete HTMLElement.prototype.scrollIntoView;
+      });
     });
   });
 });
