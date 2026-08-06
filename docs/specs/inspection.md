@@ -832,6 +832,243 @@ change excludes it. Keyboard navigation doesn't add a new rule here,
 it inherits this one for free — worth stating explicitly so it isn't
 left as an unstated assumption.
 
+### Pause/Resume/Clear/Export model — Accepted: operational layer, not a rendering layer; viewport-freeze pause; Store-scoped export
+
+Everything decided above (Presentation, Selection, Filtering, Search,
+Keyboard Navigation) answers *which events the developer sees and how
+they move through them*. This phase answers a different question:
+*what control does the developer have over the stream itself?* Four
+sub-decisions, recorded together because — like Filtering and Search —
+they only cohere as a set, plus one constraint that governs all four.
+
+**0. Constraint that shapes everything below: this is Panel-only
+behavior. The Store, the Navigation Context pipeline, and the Renderer
+do not change.**
+
+- **Store stays exactly what it is today: retain events, notify
+  subscribers.** It must not learn about pause, panels, or export.
+  Anything upstream of the Panel (Runtime, Console, future Network,
+  the Bus, the Store) keeps running regardless of what the Panel is
+  doing — the same "Plugin independence" constraint already recorded
+  above extends naturally to this phase.
+- **No parallel pipeline.** There is no "paused Navigation Context" or
+  "paused Store." `Store → applyFilters() → applySearch() → window() →
+  Renderer` remains the one pipeline. Pause changes *when* the Panel
+  chooses to run that pipeline, never what it computes.
+- **Renderer stays exactly as dumb as it already is.** It has no
+  concept of paused/resumed/exporting/clearing; it renders whatever
+  `renderEventList()`/`renderInspector()` are called with, same as
+  today.
+
+This mirrors the Filtering model's Store-as-read-only constraint and
+the Panel state model's "renderer knows nothing about selection
+ownership" — the same seam discipline, applied to a fourth kind of
+Panel-local state.
+
+> **Operational invariant (stated once, prominently, precisely because
+> it's easy to erode by accident later):** while paused, a developer
+> can still filter, search, inspect, navigate, clear, and export.
+> **Only automatic Store-driven refreshes stop.** Nothing about pause
+> disables an explicit action. A future change that makes any of
+> `setFilters()`/`setSearchQuery()`/`selectEvent()`/`clear()`/
+> `exportEvents()` check `isPaused()` would be silently widening pause
+> into "freeze the whole Panel" — a different, unreviewed feature — and
+> should be treated as a regression against this invariant, not a
+> reasonable extension of it.
+
+**1. Pause semantics: pause freezes the Panel's *viewport*, not the
+Store's *capture*.** Runtime, Console, and the Store continue exactly
+as before while paused — events keep arriving and keep being retained,
+up to the Store's own limits. What changes is narrower: the Panel's
+Store-subscription callback stops re-deriving and re-rendering the
+Navigation Context in response to each new-event notification.
+
+```ts
+interface PanelState {
+  selectedEvent: DevLensEvent | null;
+  filters: FilterState;
+  searchQuery: string;
+  isPaused: boolean;
+}
+```
+
+(Same caveat as every prior state-shape sketch in this document —
+illustrative, not a commitment to a literal object over closure
+variables.)
+
+**Rejected: pause stops capture (e.g. by unsubscribing the Runtime/
+Console plugins, or telling the Bus to stop dispatching).** This would
+mean pausing DevLens changes what the *application* does, not just
+what the *panel shows* — a diagnostics tool silently dropping events
+while "paused" is actively dangerous: the exact error a developer
+paused to go read could be followed by three more that never get
+captured. Framed the way the brief put it: pause means "stop
+refreshing the viewport," not "stop recording."
+
+**API shape: `pause()` / `resume()`, not `setPaused(boolean)`.**
+Matches the existing verb-pair lifecycle style already established by
+`install()`/`uninstall()`. A boolean setter invites the question "is
+calling it twice with the same value a no-op or an error?"; `pause()`
+answers that by construction — both methods are idempotent (pausing
+an already-paused Panel, or resuming an already-running one, is simply
+a no-op beyond whatever `resume()`'s explicit resync does).
+
+**State visibility: a synchronous `isPaused()` query, not a
+subscription/observer seam.** Something needs to answer "is the Panel
+currently paused?" so a future Pause/Resume control can render the
+right label — but this is a narrow, one-off read, not a reason to
+introduce a general `onStateChange()`-style observation mechanism.
+`isPaused: boolean` is Panel-owned state (per the constraint above);
+exposing a way to *read* it doesn't move ownership anywhere, the same
+way `store.getAll()` lets you read Store state without the Store
+becoming reactive. A broader state-observation API is a real
+architectural step this project hasn't needed yet and shouldn't invent
+speculatively here — same discipline as everywhere else in this
+document.
+
+**2. The pause check lives in exactly one place: the Store-subscription
+callback.** `setFilters()`, `setSearchQuery()`, and `selectEvent()` are
+explicit developer actions and always run against the current Store
+snapshot, whether or not the Panel is paused — a developer who tightens
+a filter while paused expects to see the up-to-the-moment matching
+events, not a stale pre-pause snapshot re-filtered. Only the automatic
+path — "a new event arrived, re-derive and re-render" — is what pause
+suppresses. This is the same "don't reapply a rule outside the context
+it was written for" reasoning already used once in this document (see
+Panel state model, above, on selection vs. Store re-renders): pause is
+a statement about *automatic* refresh, not about *all* rendering.
+
+**3. Resume performs exactly one explicit resync — no replay.** On
+resume, the Panel reads `store.getAll()` once, recomputes the
+Navigation Context (filters → search → window), and renders once. There
+is no event-by-event catch-up and no animation. Events that arrived
+while paused become visible all at once, in their normal position,
+exactly as if the Panel had been rendering the whole time and the
+developer just hadn't scrolled to look.
+
+**Rejected: buffering paused events for a replay/catch-up sequence.**
+Nothing about DevLens's model treats event arrival as something to
+dramatize — the Store is already the durable record. Building a replay
+mechanism would be exactly the kind of speculative complexity this
+project rejects by default (the `assert.ts`/`now()` precedent); nothing
+today demonstrates a developer wants to watch events "catch up" rather
+than simply see the current state.
+
+**4. Clear is Panel-initiated and Panel-refreshed, because
+`store.clear()` does not call `notify()`.** This was already flagged as
+a fact (not a bug) during Session 4 implementation: only `add()`
+notifies subscribers today, and changing that is explicitly out of
+scope — Store stays untouched per the constraint above. Clear is
+therefore implemented as an explicit two-step Panel action, not a
+"call clear and let the subscription pick it up":
+
+```text
+panel clear()
+  → store.clear()
+  → refresh()   (same recompute-and-render the subscription callback
+                 would normally do — called directly, since no
+                 notification will arrive to trigger it)
+```
+
+`refresh()` runs unconditionally here, even if the Panel is currently
+paused — Clear is an explicit developer action (like `setFilters()`),
+not an automatic Store-driven update, so the same reasoning from
+decision 2 applies: pause only suppresses the *automatic* path.
+
+**Consequence, not a new rule:** clearing empties the Navigation
+Context, which means a currently-selected event (if any) is no longer
+part of it. The existing Selection persistence rule already covers
+this — selection clears because the event is excluded from the
+navigation context, the same as a filter excluding it. No special case
+needed.
+
+**5. Export is Store-scoped, not view-scoped, and is a plain
+`DevLensEvent[]` JSON array — no wrapper object.** Export answers "give
+me this session's data," not "give me what I'm currently looking at";
+it deliberately ignores the current filters, search query, and
+selection, per the "Implications to preserve" note already recorded
+under the Presentation model above. Concretely:
+
+```text
+store.getAll()  →  serializeEvents()  →  string
+```
+
+**Export vs. download is a real seam, not one step.** `panel.ts`
+exposes `exportEvents(): string` — it returns serialized session data
+and stops there. Turning that string into an actual downloaded file
+(`Blob`, `URL.createObjectURL`, a programmatically-clicked
+`<a download>`) is a browser-presentation concern, not something the
+Panel's data layer should own — the same reasoning that keeps
+`applyFilters()`/`applySearch()` free of DOM, extended one layer
+further. The download mechanics live in the controls component (see
+Session controls model, below), which calls `panel.exportEvents()` and
+does the rest.
+
+**Rejected: exporting the current Navigation Context instead of the
+full Store.** A developer sharing a bug report wants the whole session,
+not an accidental subset determined by whatever filter they happened
+to leave active. Filters and search are navigation aids for the live
+UI; they have no business silently truncating an export artifact.
+
+**Rejected (for now): a wrapped format with session metadata (export
+timestamp, DevLens version, event count).** This is exactly the
+"building for a future consumer that doesn't exist yet" pattern this
+project has rejected before (`RuntimePlugin` type alias, `assert.ts`) —
+nothing today reads an exported file back in, so there's no concrete
+need a wrapper would serve yet. A raw array is the smaller, sufficient
+artifact; if/when Import is designed, wrapping (and the versioning
+questions that come with it) becomes that feature's decision to make,
+not one to guess at now on Export's behalf.
+
+**Import is explicitly out of scope for this phase** — reconfirming
+the existing Non-goal; no abstraction is being introduced here to
+anticipate it.
+
+### Session controls model — Accepted: a dedicated `session-controls.ts`, not an expansion of the toolbar
+
+Mirroring the Search controls model's "its own component, not folded
+into the toolbar" decision, Pause/Resume, Clear, and Export get their
+own controls component, separate from `toolbar.ts` (filtering) and
+`search-box.ts` (search). All three are, in the broad sense, "controls
+that call a Panel seam and nothing else" — but they drive three
+different Panel behaviors (`pause()`/`resume()`, `clear()`,
+`exportEvents()`) that have nothing to do with filtering or search.
+Folding them into `toolbar.ts` would start that file down the path
+every UI project eventually regrets: "just one more button" today,
+an unrelated-responsibility grab-bag in six months. Keeping filtering,
+search, and session operations as three separate, single-purpose
+components is the same discipline already applied twice.
+
+`session-controls.ts` follows the exact mounting pattern already
+established for the toolbar and search box: created and appended to
+`overlay.shadowRoot` by `panel.ts`, before `createRenderer()` is
+called, so it lands in DOM order alongside its siblings.
+`createRenderer()` remains unaware it exists — same as the other two.
+
+This introduces a fifth ShadowRoot region (toolbar, search, session
+controls, event-list, inspector). Every prior region of this kind —
+the toolbar (Session 5) and the search box (Session 6) — got its own
+short ADR-0008 amendment recording the region and the mounting
+decision, even though neither was a large architectural shift in
+isolation; the amendments exist because ADR-0008 is where this
+project's ShadowRoot region structure is documented end to end, and
+letting one region diverge from that record undermines the reason the
+prior two amendments were written at all. This phase gets the same
+treatment — see ADR-0008's Session 7 amendment.
+
+#### Summary of what does *not* change
+
+Worth stating plainly, since this phase's whole shape is "prove the
+architecture absorbs this without new layers":
+
+- `EventStore`'s public contract: unchanged.
+- The `Store → applyFilters() → applySearch() → window() → Renderer`
+  pipeline: unchanged.
+- `Renderer`'s contract (`renderEventList`, `renderInspector`,
+  `setSelectedRow`): unchanged.
+- Selection, Filtering, and Search's own rules: unchanged, and not
+  special-cased for pause.
+
 ## User stories
 
 As a developer using an app with DevLens embedded...
@@ -854,17 +1091,11 @@ a starting set, not exhaustive.)*
 
 ## Open questions
 
-None of the following have been decided. They should be resolved one
-at a time during Session 4 design discussion, not assumed by whoever
-implements first.
-
-- **Pause/resume semantics:** does "pause" stop the Store from
-  receiving new events, or just stop the Panel from rendering them
-  (Store keeps accumulating in the background)? These have different
-  memory/`MAX_RENDERED_EVENTS` implications.
-- **Export format:** raw `DevLensEvent[]` as JSON, or a wrapped format
-  with session metadata (start/end time, DevLens version)? Does import
-  need to validate/version-check what it's given?
+None remain from the original Session 4 sequence — Pause/resume
+semantics and Export semantics are now decided (see Pause/Resume/
+Clear/Export model, above). Import's own open questions (format
+validation, versioning) are deliberately not pre-answered here; they
+belong to whichever future session actually designs Import.
 
 ## Constraints
 
@@ -923,8 +1154,17 @@ Questions surface something that forces revisiting an earlier phase:
   for either direction, Home/End supported, active only while the
   event list has focus, scrolling handled internally by
   `setSelectedRow()` with no public API change.
-- **Phase 4:** Pause/resume, clear, export/import. Blocked on the
-  Pause/resume semantics and Export semantics open questions.
+- **Phase 4 — decided, ready for implementation.** Pause/resume/clear/
+  export model is decided (see Pause/Resume/Clear/Export model, above):
+  pause freezes the Panel's automatic re-render on new-event
+  notifications while Store capture continues unaffected; explicit
+  developer actions (`setFilters`, `setSearchQuery`, `selectEvent`,
+  `clear`) always run live regardless of pause state; resume performs
+  one explicit recompute-and-render with no replay; clear explicitly
+  calls `store.clear()` followed by an explicit refresh (since
+  `store.clear()` doesn't notify); export serializes the full Store
+  (`store.getAll()`) as a raw `DevLensEvent[]` JSON array, ignoring
+  current filters/search/selection. Import remains out of scope.
 
 ## Future extensions
 

@@ -278,3 +278,45 @@ components are laid out, not a reason to merge their logic.
 a distinct "no results" state, a match count). Only the input
 control exists now — see inspection.md's Search controls model scope
 note.
+
+## Amendment (Session 7): session-controls region, a fifth sibling, not an expansion of the toolbar
+
+Operational controls (see `docs/specs/inspection.md`'s "Session
+controls model") add a fifth ShadowRoot region:
+
+```text
+ShadowRoot
+├── [data-devlens-toolbar]           — createToolbar()'s element
+├── [data-devlens-search]            — createSearchBox()'s element
+├── [data-devlens-session-controls]  — createSessionControls()'s element (new)
+├── [data-devlens-event-list]        — event rows
+└── [data-devlens-inspector]         — createInspector()'s element
+```
+
+**Decision: session controls (Pause/Resume, Clear, Export) are a
+separate component, mounted by `panel.ts` the same way as the toolbar
+and search box** — created and appended to `overlay.shadowRoot` before
+`createRenderer()` is called, landing before the event list in DOM
+order, same as its two siblings. `createRenderer()` remains unaware
+this region exists, same as every other region above.
+
+This is the same "separate component per independent responsibility"
+call already made twice (toolbar for filtering, search box for
+search), applied to a third, unrelated responsibility. Pause/Resume,
+Clear, and Export don't narrow the Navigation Context the way
+filtering and search do — they're operational controls over the
+Store/Panel relationship, not navigation aids — but they share the
+same structural shape as their siblings: a leaf UI component whose
+only outward communication is calling Panel seams
+(`pause()`/`resume()`/`clear()`/`exportEvents()`) it doesn't otherwise
+depend on.
+
+**Session controls own the browser-specific mechanics of turning
+`panel.exportEvents()`'s returned string into a downloaded file**
+(`Blob`, `URL.createObjectURL`, a programmatically-clicked
+`<a download>`). `panel.ts` itself never touches any of this — see
+inspection.md's Pause/Resume/Clear/Export model, decision 5.
+
+**Non-goal, still deferred:** a floating Panel-wide expand/collapse
+trigger (tracked in inspection.md's Future extensions) is unrelated to
+this region and isn't introduced by it.

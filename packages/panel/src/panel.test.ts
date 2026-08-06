@@ -1329,3 +1329,312 @@ describe("createPanel keyboard navigation", () => {
     panel.uninstall();
   });
 });
+
+describe("createPanel pause/resume/clear/export", () => {
+  beforeEach(() => {
+    idCounter = 0;
+  });
+
+  function renderedTitles(): string[] {
+    return Array.from(
+      getPanelRoot()?.querySelectorAll("[data-devlens-event-title]") ?? []
+    ).map((el) => el.textContent);
+  }
+
+  describe("isPaused()", () => {
+    it("is false immediately after install", () => {
+      const panel = createPanel(createFakeStore());
+      panel.install();
+
+      expect(panel.isPaused()).toBe(false);
+
+      panel.uninstall();
+    });
+
+    it("becomes true after pause() and false after resume()", () => {
+      const panel = createPanel(createFakeStore());
+      panel.install();
+
+      panel.pause();
+      expect(panel.isPaused()).toBe(true);
+
+      panel.resume();
+      expect(panel.isPaused()).toBe(false);
+
+      panel.uninstall();
+    });
+
+    it("pause() is idempotent — calling it twice leaves isPaused() true", () => {
+      const panel = createPanel(createFakeStore());
+      panel.install();
+
+      panel.pause();
+      panel.pause();
+      expect(panel.isPaused()).toBe(true);
+
+      panel.uninstall();
+    });
+  });
+
+  describe("pause()", () => {
+    it("stops new Store events from appearing in the rendered list", () => {
+      const store = createFakeStore([makeEvent({ title: "Before Pause" })]);
+      const panel = createPanel(store);
+      panel.install();
+
+      panel.pause();
+      store.add(makeEvent({ title: "During Pause" }));
+
+      expect(renderedTitles()).toEqual(["Before Pause"]);
+
+      panel.uninstall();
+    });
+
+    it("does not stop the Store from actually retaining the event", () => {
+      const store = createFakeStore();
+      const panel = createPanel(store);
+      panel.install();
+
+      panel.pause();
+      store.add(makeEvent({ title: "Captured While Paused" }));
+
+      expect(store.getAll()).toHaveLength(1);
+      expect(store.getAll()[0].title).toBe("Captured While Paused");
+
+      panel.uninstall();
+    });
+
+    it("does not prevent setFilters() from updating the rendered list live", () => {
+      const store = createFakeStore([
+        makeEvent({ title: "Runtime Event", category: "runtime" }),
+        makeEvent({ title: "Console Event", category: "console" }),
+      ]);
+      const panel = createPanel(store);
+      panel.install();
+
+      panel.pause();
+      panel.setFilters({ categories: ["runtime"], severities: [] });
+
+      expect(renderedTitles()).toEqual(["Runtime Event"]);
+
+      panel.uninstall();
+    });
+
+    it("does not prevent setSearchQuery() from updating the rendered list live", () => {
+      const store = createFakeStore([
+        makeEvent({ title: "Network Timeout" }),
+        makeEvent({ title: "Console Log" }),
+      ]);
+      const panel = createPanel(store);
+      panel.install();
+
+      panel.pause();
+      panel.setSearchQuery("timeout");
+
+      expect(renderedTitles()).toEqual(["Network Timeout"]);
+
+      panel.uninstall();
+    });
+
+    it("does not prevent clicking a row from updating selection live", () => {
+      const store = createFakeStore([makeEvent({ title: "Clickable Event" })]);
+      const panel = createPanel(store);
+      panel.install();
+
+      panel.pause();
+      clickRow(store.getAll()[0].id);
+
+      expect(
+        getPanelRoot()?.querySelector("[data-devlens-inspector-title]")
+          ?.textContent
+      ).toBe("Clickable Event");
+
+      panel.uninstall();
+    });
+  });
+
+  describe("resume()", () => {
+    it("performs one resync that reveals every event captured while paused", () => {
+      const store = createFakeStore([makeEvent({ title: "Before Pause" })]);
+      const panel = createPanel(store);
+      panel.install();
+
+      panel.pause();
+      store.add(makeEvent({ title: "During Pause One" }));
+      store.add(makeEvent({ title: "During Pause Two" }));
+      expect(renderedTitles()).toEqual(["Before Pause"]);
+
+      panel.resume();
+
+      expect(renderedTitles()).toEqual([
+        "Before Pause",
+        "During Pause One",
+        "During Pause Two",
+      ]);
+
+      panel.uninstall();
+    });
+
+    it("resumes automatic refresh — a later Store event appears without another resume()", () => {
+      const store = createFakeStore();
+      const panel = createPanel(store);
+      panel.install();
+
+      panel.pause();
+      panel.resume();
+      store.add(makeEvent({ title: "After Resume" }));
+
+      expect(renderedTitles()).toEqual(["After Resume"]);
+
+      panel.uninstall();
+    });
+
+    it("is harmless when the Panel isn't paused — just re-syncs", () => {
+      const store = createFakeStore([makeEvent({ title: "Only Event" })]);
+      const panel = createPanel(store);
+      panel.install();
+
+      expect(() => panel.resume()).not.toThrow();
+      expect(renderedTitles()).toEqual(["Only Event"]);
+
+      panel.uninstall();
+    });
+  });
+
+  describe("clear()", () => {
+    it("empties the Store", () => {
+      const store = createFakeStore([makeEvent(), makeEvent()]);
+      const panel = createPanel(store);
+      panel.install();
+
+      panel.clear();
+
+      expect(store.getAll()).toEqual([]);
+
+      panel.uninstall();
+    });
+
+    it("refreshes the rendered list immediately, despite store.clear() not calling notify()", () => {
+      const store = createFakeStore([makeEvent({ title: "Will Be Cleared" })]);
+      const panel = createPanel(store);
+      panel.install();
+
+      panel.clear();
+
+      expect(renderedTitles()).toEqual([]);
+
+      panel.uninstall();
+    });
+
+    it("clears selection via the existing persistence rule — no special case needed", () => {
+      const store = createFakeStore([makeEvent({ title: "Selected Event" })]);
+      const panel = createPanel(store);
+      panel.install();
+
+      clickRow(store.getAll()[0].id);
+      expect(
+        getPanelRoot()?.querySelector("[data-devlens-inspector-title]")
+          ?.textContent
+      ).toBe("Selected Event");
+
+      panel.clear();
+
+      expect(
+        getPanelRoot()?.querySelector("[data-devlens-inspector-empty]")
+      ).not.toBeNull();
+
+      panel.uninstall();
+    });
+
+    it("runs even while paused — an explicit action bypasses the automatic-refresh gate", () => {
+      const store = createFakeStore([makeEvent({ title: "Will Be Cleared" })]);
+      const panel = createPanel(store);
+      panel.install();
+
+      panel.pause();
+      panel.clear();
+
+      expect(renderedTitles()).toEqual([]);
+      expect(panel.isPaused()).toBe(true);
+
+      panel.uninstall();
+    });
+  });
+
+  describe("exportEvents()", () => {
+    it("returns the empty Store as an empty JSON array", () => {
+      const panel = createPanel(createFakeStore());
+      panel.install();
+
+      expect(panel.exportEvents()).toBe("[]");
+
+      panel.uninstall();
+    });
+
+    it("returns every Store event, serialized", () => {
+      const events = [makeEvent({ title: "One" }), makeEvent({ title: "Two" })];
+      const store = createFakeStore(events);
+      const panel = createPanel(store);
+      panel.install();
+
+      const parsed = JSON.parse(panel.exportEvents());
+
+      expect(parsed).toHaveLength(2);
+      expect(parsed.map((e: DevLensEvent) => e.title)).toEqual(["One", "Two"]);
+
+      panel.uninstall();
+    });
+
+    it("ignores active filters — exports the full Store, not the Navigation Context", () => {
+      const store = createFakeStore([
+        makeEvent({ title: "Runtime Event", category: "runtime" }),
+        makeEvent({ title: "Console Event", category: "console" }),
+      ]);
+      const panel = createPanel(store);
+      panel.install();
+
+      panel.setFilters({ categories: ["runtime"], severities: [] });
+      expect(renderedTitles()).toEqual(["Runtime Event"]); // sanity: filter is actually active
+
+      const parsed = JSON.parse(panel.exportEvents());
+      expect(parsed.map((e: DevLensEvent) => e.title).sort()).toEqual([
+        "Console Event",
+        "Runtime Event",
+      ]);
+
+      panel.uninstall();
+    });
+
+    it("ignores an active search query — exports the full Store", () => {
+      const store = createFakeStore([
+        makeEvent({ title: "Network Timeout" }),
+        makeEvent({ title: "Console Log" }),
+      ]);
+      const panel = createPanel(store);
+      panel.install();
+
+      panel.setSearchQuery("timeout");
+      expect(renderedTitles()).toEqual(["Network Timeout"]); // sanity: search is actually active
+
+      const parsed = JSON.parse(panel.exportEvents());
+      expect(parsed).toHaveLength(2);
+
+      panel.uninstall();
+    });
+
+    it("reflects events captured while paused, without requiring resume() first", () => {
+      const store = createFakeStore();
+      const panel = createPanel(store);
+      panel.install();
+
+      panel.pause();
+      store.add(makeEvent({ title: "Captured While Paused" }));
+
+      const parsed = JSON.parse(panel.exportEvents());
+      expect(parsed).toHaveLength(1);
+      expect(parsed[0].title).toBe("Captured While Paused");
+
+      panel.uninstall();
+    });
+  });
+});

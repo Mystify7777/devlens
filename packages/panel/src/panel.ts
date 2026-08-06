@@ -8,6 +8,7 @@ import { MAX_RENDERED_EVENTS } from "./constants";
 import { applyFilters, createEmptyFilterState, type FilterState } from "./filters";
 import { applySearch } from "./search";
 import { computeNavigationTarget, type NavigationDirection } from "./navigation";
+import { serializeEvents } from "./serialize";
 
 /**
  * Panel's public surface, extended by two seams beyond Plugin:
@@ -24,10 +25,23 @@ import { computeNavigationTarget, type NavigationDirection } from "./navigation"
  * directly — there is deliberately no separate seam for it, since it
  * drives the exact same state transition a click does. See
  * inspection.md's Keyboard navigation model.
+ *
+ * pause()/resume()/clear()/exportEvents()/isPaused() are the
+ * operational layer described in inspection.md's Pause/Resume/Clear/
+ * Export model. Every one of them reuses updateEventList() as its
+ * refresh path — there is deliberately no second "refresh"/"rerender"
+ * function. isPaused() is a synchronous, read-only query; there is no
+ * subscription/observer seam (see that section's "State visibility"
+ * decision).
  */
 export interface PanelController extends Plugin {
   setFilters(filters: FilterState): void;
   setSearchQuery(query: string): void;
+  pause(): void;
+  resume(): void;
+  clear(): void;
+  exportEvents(): string;
+  isPaused(): boolean;
 }
 
 const NAVIGATION_KEYS: Record<string, NavigationDirection> = {
@@ -45,6 +59,12 @@ export function createPanel(store: EventStore): PanelController {
   let selectedEvent: DevLensEvent | null = null;
   let filters: FilterState = createEmptyFilterState();
   let searchQuery = "";
+  // Operational state (inspection.md, Pause/Resume/Clear/Export model).
+  // Gates only the automatic Store-subscription refresh path
+  // (handleStoreUpdate, below) — every explicit action (setFilters,
+  // setSearchQuery, selectEvent, clear, resume) ignores this and
+  // always runs live. See that section's Operational invariant.
+  let isPaused = false;
   // The currently rendered rows — kept in sync by updateEventList() on
   // every Store/filter/search change. Keyboard navigation traverses
   // this directly rather than recomputing filters/search on every
@@ -143,6 +163,17 @@ export function createPanel(store: EventStore): PanelController {
     updateEventList();
   }
 
+  // The single automatic refresh path — the only place isPaused is
+  // ever checked (inspection.md, Pause/Resume/Clear/Export model,
+  // decision 2). Every explicit action below (pause/resume/clear, plus
+  // the existing applyNewFilters/applyNewSearchQuery/selectEvent) is
+  // unconditional and reuses updateEventList() directly; only this
+  // Store-subscription callback is pause-aware.
+  function handleStoreUpdate() {
+    if (isPaused) return;
+    updateEventList();
+  }
+
   return {
     install() {
       if (installed) return;
@@ -211,9 +242,7 @@ export function createPanel(store: EventStore): PanelController {
         selectEvent(target);
       });
 
-      unsubscribe = store.subscribe(() => {
-        updateEventList();
-      });
+      unsubscribe = store.subscribe(handleStoreUpdate);
 
       overlay.mount();
       installed = true;
@@ -234,10 +263,57 @@ export function createPanel(store: EventStore): PanelController {
       filters = createEmptyFilterState();
       searchQuery = "";
       currentVisibleEvents = [];
+      isPaused = false;
       installed = false;
     },
 
     setFilters: applyNewFilters,
     setSearchQuery: applyNewSearchQuery,
+
+    // Pause: freezes only the automatic Store-subscription refresh
+    // path (handleStoreUpdate). Capture (Runtime/Console/Store)
+    // continues unaffected. Idempotent: pausing an already-paused
+    // Panel is a no-op.
+    pause() {
+      isPaused = true;
+    },
+
+    // Resume: exactly one explicit resync — no replay, no
+    // event-by-event catch-up (inspection.md, decision 3). Reuses
+    // updateEventList(), the same refresh path every other explicit
+    // action already uses. Idempotent: resuming an already-running
+    // Panel just re-syncs once, which is harmless.
+    resume() {
+      isPaused = false;
+      updateEventList();
+    },
+
+    // Clear: store.clear() doesn't notify() (a documented Store fact,
+    // not a bug — see inspection.md, decision 4), so this explicitly
+    // calls the same updateEventList() refresh path afterward. Runs
+    // unconditionally, regardless of isPaused, since it's an explicit
+    // action like setFilters()/setSearchQuery() — not the automatic
+    // path that pause gates. Selection clearing falls out of the
+    // existing Selection persistence rule inside updateEventList();
+    // no special-case handling needed here.
+    clear() {
+      store.clear();
+      updateEventList();
+    },
+
+    // Export: Store-scoped, not view-scoped — ignores current
+    // filters/search/selection (inspection.md, decision 5). Returns
+    // serialized data only; turning that into a downloaded file is a
+    // browser-presentation concern that belongs to session-controls.ts,
+    // not here.
+    exportEvents() {
+      return serializeEvents(store.getAll());
+    },
+
+    // Synchronous, read-only query — not an observable/subscribable
+    // seam (inspection.md, "State visibility" decision).
+    isPaused() {
+      return isPaused;
+    },
   };
 }
