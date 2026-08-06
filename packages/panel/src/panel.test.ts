@@ -1,5 +1,5 @@
 // packages/panel/src/panel.test.ts
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type { DevLensEvent, EventStore } from "@devlens/core";
 import { createPanel } from "./panel";
 
@@ -1633,6 +1633,169 @@ describe("createPanel pause/resume/clear/export", () => {
       const parsed = JSON.parse(panel.exportEvents());
       expect(parsed).toHaveLength(1);
       expect(parsed[0].title).toBe("Captured While Paused");
+
+      panel.uninstall();
+    });
+  });
+});
+
+// Integration tests: unlike the describe block above (which calls
+// panel.pause()/resume()/clear()/exportEvents() directly) and
+// session-controls.test.ts (which exercises the component in
+// isolation against fake handlers), these click the actual rendered
+// buttons inside a fully mounted Panel — proving the wiring in
+// install() itself, not just each side of it independently.
+describe("createPanel session controls, mounted end-to-end", () => {
+  beforeEach(() => {
+    idCounter = 0;
+  });
+
+  function renderedTitles(): string[] {
+    return Array.from(
+      getPanelRoot()?.querySelectorAll("[data-devlens-event-title]") ?? []
+    ).map((el) => el.textContent);
+  }
+
+  function clickPauseButton(): void {
+    getPanelRoot()
+      ?.querySelector<HTMLButtonElement>(
+        "[data-devlens-session-pause-button]"
+      )
+      ?.click();
+  }
+
+  function pauseButtonState(): string | null {
+    return (
+      getPanelRoot()
+        ?.querySelector("[data-devlens-session-pause-button]")
+        ?.getAttribute("data-devlens-session-state") ?? null
+    );
+  }
+
+  function clickClearButton(): void {
+    getPanelRoot()
+      ?.querySelector<HTMLButtonElement>(
+        "[data-devlens-session-clear-button]"
+      )
+      ?.click();
+  }
+
+  function clickExportButton(): void {
+    getPanelRoot()
+      ?.querySelector<HTMLButtonElement>(
+        "[data-devlens-session-export-button]"
+      )
+      ?.click();
+  }
+
+  it("renders the session controls region alongside the toolbar and search box", () => {
+    const panel = createPanel(createFakeStore());
+    panel.install();
+
+    expect(
+      getPanelRoot()?.querySelector("[data-devlens-session-controls]")
+    ).not.toBeNull();
+
+    panel.uninstall();
+  });
+
+  it("clicking Pause freezes the rendered list; clicking Resume reveals what arrived meanwhile", () => {
+    const store = createFakeStore([makeEvent({ title: "Before Pause" })]);
+    const panel = createPanel(store);
+    panel.install();
+
+    expect(pauseButtonState()).toBe("running");
+
+    clickPauseButton();
+    expect(pauseButtonState()).toBe("paused");
+    expect(panel.isPaused()).toBe(true);
+
+    store.add(makeEvent({ title: "During Pause" }));
+    expect(renderedTitles()).toEqual(["Before Pause"]);
+
+    clickPauseButton(); // now labeled "Resume"
+    expect(pauseButtonState()).toBe("running");
+    expect(panel.isPaused()).toBe(false);
+    expect(renderedTitles()).toEqual(["Before Pause", "During Pause"]);
+
+    panel.uninstall();
+  });
+
+  it("clicking Clear empties both the Store and the rendered list", () => {
+    const store = createFakeStore([makeEvent({ title: "Will Be Cleared" })]);
+    const panel = createPanel(store);
+    panel.install();
+
+    clickClearButton();
+
+    expect(store.getAll()).toEqual([]);
+    expect(renderedTitles()).toEqual([]);
+
+    panel.uninstall();
+  });
+
+  describe("clicking Export", () => {
+    let capturedBlobParts: BlobPart[] | undefined;
+    let anchorClickSpy: ReturnType<typeof vi.spyOn>;
+    const OriginalBlob = globalThis.Blob;
+
+    beforeEach(() => {
+      class StubBlob {
+        constructor(parts: BlobPart[]) {
+          capturedBlobParts = parts;
+        }
+      }
+      // @ts-expect-error — see session-controls.test.ts for why jsdom's
+      // real Blob/URL.createObjectURL aren't used here.
+      globalThis.Blob = StubBlob;
+      URL.createObjectURL = vi.fn(() => "blob:mock-url");
+      URL.revokeObjectURL = vi.fn();
+      anchorClickSpy = vi
+        .spyOn(HTMLAnchorElement.prototype, "click")
+        .mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      globalThis.Blob = OriginalBlob;
+      capturedBlobParts = undefined;
+      vi.restoreAllMocks();
+    });
+
+    it("downloads exactly what panel.exportEvents() would return", () => {
+      const store = createFakeStore([
+        makeEvent({ title: "One" }),
+        makeEvent({ title: "Two" }),
+      ]);
+      const panel = createPanel(store);
+      panel.install();
+
+      const expected = panel.exportEvents();
+      clickExportButton();
+
+      expect(capturedBlobParts).toEqual([expected]);
+      expect(anchorClickSpy).toHaveBeenCalledTimes(1);
+
+      panel.uninstall();
+    });
+
+    it("exports the full Store even while a filter narrows what's rendered", () => {
+      const store = createFakeStore([
+        makeEvent({ title: "Runtime Event", category: "runtime" }),
+        makeEvent({ title: "Console Event", category: "console" }),
+      ]);
+      const panel = createPanel(store);
+      panel.install();
+
+      panel.setFilters({ categories: ["runtime"], severities: [] });
+      expect(renderedTitles()).toEqual(["Runtime Event"]); // sanity
+
+      clickExportButton();
+
+      const parsed = JSON.parse(capturedBlobParts![0] as string);
+      expect(parsed.map((e: DevLensEvent) => e.title).sort()).toEqual([
+        "Console Event",
+        "Runtime Event",
+      ]);
 
       panel.uninstall();
     });

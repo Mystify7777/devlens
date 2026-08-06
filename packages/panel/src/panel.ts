@@ -4,6 +4,7 @@ import { createOverlay } from "./overlay";
 import { createRenderer } from "./renderer";
 import { createToolbar } from "./components/toolbar";
 import { createSearchBox } from "./components/search-box";
+import { createSessionControls } from "./components/session-controls";
 import { MAX_RENDERED_EVENTS } from "./constants";
 import { applyFilters, createEmptyFilterState, type FilterState } from "./filters";
 import { applySearch } from "./search";
@@ -174,6 +175,57 @@ export function createPanel(store: EventStore): PanelController {
     updateEventList();
   }
 
+  // Named the same way applyNewFilters/applyNewSearchQuery are: both
+  // the public PanelController method and install()'s wiring into
+  // createSessionControls() below call these directly, rather than
+  // each defining its own copy of the same logic.
+
+  // Pause: freezes only the automatic Store-subscription refresh path
+  // (handleStoreUpdate, above). Capture (Runtime/Console/Store)
+  // continues unaffected. Idempotent: pausing an already-paused Panel
+  // is a no-op.
+  function pause() {
+    isPaused = true;
+  }
+
+  // Resume: exactly one explicit resync — no replay, no event-by-event
+  // catch-up (inspection.md, decision 3). Reuses updateEventList(),
+  // the same refresh path every other explicit action already uses.
+  // Idempotent: resuming an already-running Panel just re-syncs once,
+  // which is harmless.
+  function resume() {
+    isPaused = false;
+    updateEventList();
+  }
+
+  // Clear: store.clear() doesn't notify() (a documented Store fact,
+  // not a bug — see inspection.md, decision 4), so this explicitly
+  // calls the same updateEventList() refresh path afterward. Runs
+  // unconditionally, regardless of isPaused, since it's an explicit
+  // action like setFilters()/setSearchQuery() — not the automatic path
+  // that pause gates. Selection clearing falls out of the existing
+  // Selection persistence rule inside updateEventList(); no
+  // special-case handling needed here.
+  function clear() {
+    store.clear();
+    updateEventList();
+  }
+
+  // Export: Store-scoped, not view-scoped — ignores current
+  // filters/search/selection (inspection.md, decision 5). Returns
+  // serialized data only; turning that into a downloaded file is a
+  // browser-presentation concern that belongs to session-controls.ts,
+  // not here.
+  function exportEvents() {
+    return serializeEvents(store.getAll());
+  }
+
+  // Synchronous, read-only query — not an observable/subscribable seam
+  // (inspection.md, "State visibility" decision).
+  function getIsPaused() {
+    return isPaused;
+  }
+
   return {
     install() {
       if (installed) return;
@@ -181,14 +233,26 @@ export function createPanel(store: EventStore): PanelController {
 
       overlay = createOverlay();
 
-      // Toolbar and search box are both mounted before the renderer is
-      // created, which is what puts them first in ShadowRoot DOM
-      // order — see ADR-0008's Session 5 and Session 6 amendments.
-      // createRenderer() has no idea either region exists; it still
-      // only manages the two regions from the Session 4 amendment.
+      // Toolbar, search box, and session controls are all mounted
+      // before the renderer is created, which is what puts them first
+      // in ShadowRoot DOM order — see ADR-0008's Session 5, Session 6,
+      // and Session 7 amendments. createRenderer() has no idea any of
+      // the three exist; it still only manages the two regions from
+      // the Session 4 amendment.
       const toolbar = createToolbar(applyNewFilters);
       const searchBox = createSearchBox(applyNewSearchQuery);
-      overlay.shadowRoot.append(toolbar.element, searchBox.element);
+      const sessionControls = createSessionControls({
+        onPause: pause,
+        onResume: resume,
+        onClear: clear,
+        onExport: exportEvents,
+        isPaused: getIsPaused,
+      });
+      overlay.shadowRoot.append(
+        toolbar.element,
+        searchBox.element,
+        sessionControls.element
+      );
 
       renderer = createRenderer(overlay.shadowRoot);
 
@@ -269,51 +333,10 @@ export function createPanel(store: EventStore): PanelController {
 
     setFilters: applyNewFilters,
     setSearchQuery: applyNewSearchQuery,
-
-    // Pause: freezes only the automatic Store-subscription refresh
-    // path (handleStoreUpdate). Capture (Runtime/Console/Store)
-    // continues unaffected. Idempotent: pausing an already-paused
-    // Panel is a no-op.
-    pause() {
-      isPaused = true;
-    },
-
-    // Resume: exactly one explicit resync — no replay, no
-    // event-by-event catch-up (inspection.md, decision 3). Reuses
-    // updateEventList(), the same refresh path every other explicit
-    // action already uses. Idempotent: resuming an already-running
-    // Panel just re-syncs once, which is harmless.
-    resume() {
-      isPaused = false;
-      updateEventList();
-    },
-
-    // Clear: store.clear() doesn't notify() (a documented Store fact,
-    // not a bug — see inspection.md, decision 4), so this explicitly
-    // calls the same updateEventList() refresh path afterward. Runs
-    // unconditionally, regardless of isPaused, since it's an explicit
-    // action like setFilters()/setSearchQuery() — not the automatic
-    // path that pause gates. Selection clearing falls out of the
-    // existing Selection persistence rule inside updateEventList();
-    // no special-case handling needed here.
-    clear() {
-      store.clear();
-      updateEventList();
-    },
-
-    // Export: Store-scoped, not view-scoped — ignores current
-    // filters/search/selection (inspection.md, decision 5). Returns
-    // serialized data only; turning that into a downloaded file is a
-    // browser-presentation concern that belongs to session-controls.ts,
-    // not here.
-    exportEvents() {
-      return serializeEvents(store.getAll());
-    },
-
-    // Synchronous, read-only query — not an observable/subscribable
-    // seam (inspection.md, "State visibility" decision).
-    isPaused() {
-      return isPaused;
-    },
+    pause,
+    resume,
+    clear,
+    exportEvents,
+    isPaused: getIsPaused,
   };
 }
