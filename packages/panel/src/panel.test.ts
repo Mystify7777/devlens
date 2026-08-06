@@ -94,6 +94,16 @@ function clickRow(eventId: string): void {
   row?.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
 }
 
+// Shared by the pause/resume/clear/export describe blocks below (both
+// the direct-method-call tests and the mounted-button integration
+// tests) — hoisted here rather than duplicated in each, alongside the
+// other cross-cutting helpers above.
+function renderedTitles(): string[] {
+  return Array.from(
+    getPanelRoot()?.querySelectorAll("[data-devlens-event-title]") ?? []
+  ).map((el) => el.textContent);
+}
+
 describe("createPanel", () => {
   beforeEach(() => {
     idCounter = 0;
@@ -1335,12 +1345,6 @@ describe("createPanel pause/resume/clear/export", () => {
     idCounter = 0;
   });
 
-  function renderedTitles(): string[] {
-    return Array.from(
-      getPanelRoot()?.querySelectorAll("[data-devlens-event-title]") ?? []
-    ).map((el) => el.textContent);
-  }
-
   describe("isPaused()", () => {
     it("is false immediately after install", () => {
       const panel = createPanel(createFakeStore());
@@ -1649,12 +1653,6 @@ describe("createPanel session controls, mounted end-to-end", () => {
   beforeEach(() => {
     idCounter = 0;
   });
-
-  function renderedTitles(): string[] {
-    return Array.from(
-      getPanelRoot()?.querySelectorAll("[data-devlens-event-title]") ?? []
-    ).map((el) => el.textContent);
-  }
 
   function clickPauseButton(): void {
     getPanelRoot()

@@ -36,7 +36,7 @@ dependency required for the core engine.
 - Normalized, versioned event model shared across every capture source
 - Shadow-DOM-isolated overlay — no CSS collisions with the host app
 - Zero runtime dependencies in `@devlens/core`
-- 108 test cases across the suite (`pnpm test` to run them)
+- 350 test cases across the suite (`pnpm test` to run them)
 - Every architectural decision recorded as an ADR before implementation
 
 ---
@@ -168,21 +168,19 @@ full architectural history and reasoning behind each decision.
 
 ## Roadmap
 
+Interactive inspection of captured events — inspector, filtering,
+search, keyboard navigation, and the pause/resume/clear/export
+operational layer — is complete (see `docs/specs/inspection.md` and
+`docs/adr/0009-v0.3.0-direction.md`, Option A, Accepted). Export/import
+here means exporting a session as JSON; import itself is still out of
+scope, deliberately not designed ahead of a real consumer.
+
 Not yet committed to — this is a proposed direction, open for
 discussion rather than a locked sequence:
 
 - Network capture (`@devlens/network`)
-- Inspector view (click an event for full detail: stack, metadata, context)
-- Filtering by category/severity
-- Search
-- Pause/resume capture
-- Export/import event sessions (JSON)
+- Import for previously-exported sessions
 - React wrapper around the Panel (`@devlens/react`)
-
-One open question worth resolving before starting the next package: does
-richer *interaction* with existing events (inspector, filtering, search)
-take priority over adding a new capture *source* (Network)? Both are
-reasonable next steps — this hasn't been decided yet.
 
 ---
 

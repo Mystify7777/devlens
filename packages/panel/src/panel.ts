@@ -12,8 +12,10 @@ import { computeNavigationTarget, type NavigationDirection } from "./navigation"
 import { serializeEvents } from "./serialize";
 
 /**
- * Panel's public surface, extended by two seams beyond Plugin:
- * setFilters() and setSearchQuery(). These are the "engine becomes
+ * Panel's public surface, extended by seven seams beyond Plugin:
+ * setFilters()/setSearchQuery() (Filtering/Search) and
+ * pause()/resume()/clear()/exportEvents()/isPaused() (the operational
+ * layer). setFilters()/setSearchQuery() are the "engine becomes
  * load-bearing" steps described in docs/specs/inspection.md's
  * Filtering and Search models. The toolbar and search box (below) are
  * controls — they call setFilters()/setSearchQuery(), never the
