@@ -3,19 +3,27 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createEventBus } from "@devlens/core";
 import { createNetworkPlugin } from "./network";
 
-// Now that install() actually patches window.fetch (Step 3A), every
-// test in this file needs the real reference saved and restored,
-// regardless of what an individual test does — otherwise a test that
-// calls install() without a matching uninstall() leaks a patched
-// window.fetch into whatever test runs next in this file.
+// Now that install() actually patches window.fetch (Step 3A) and
+// XMLHttpRequest.prototype.open/send (Step 4B), every test in this
+// file needs the real references saved and restored, regardless of
+// what an individual test does — otherwise a test that calls
+// install() without a matching uninstall() leaks a patched
+// window.fetch or XMLHttpRequest.prototype into whatever test runs
+// next in this file.
 let realFetch: typeof fetch;
+let realXhrOpen: typeof XMLHttpRequest.prototype.open;
+let realXhrSend: typeof XMLHttpRequest.prototype.send;
 
 beforeEach(() => {
   realFetch = window.fetch;
+  realXhrOpen = XMLHttpRequest.prototype.open;
+  realXhrSend = XMLHttpRequest.prototype.send;
 });
 
 afterEach(() => {
   window.fetch = realFetch;
+  XMLHttpRequest.prototype.open = realXhrOpen;
+  XMLHttpRequest.prototype.send = realXhrSend;
 });
 
 // Phase 0.5 (ADR-0010): the package surface is locked before any
@@ -313,6 +321,267 @@ describe("createNetworkPlugin end-to-end fetch reporting (Step 3C)", () => {
       expect(event.title).toBe("POST https://api.example.com/orders");
 
       vi.restoreAllMocks();
+    });
+  });
+});
+
+// Step 4B (ADR-0010, informed by docs/research/xhr-capture.md): the
+// full XHR chain, wired together for real — same discipline as the
+// Step 3C Fetch integration suite above. Every test here uses the
+// real, patched XMLHttpRequest.prototype (via createNetworkPlugin's
+// own install()), manually dispatching lifecycle events on a real
+// instance rather than mocking XMLHttpRequest.prototype.open/send
+// directly the way xhr-interceptor.test.ts does — this is what proves
+// the interceptor, classifier, and normalizer are wired correctly
+// together, not just individually correct.
+describe("createNetworkPlugin end-to-end XHR reporting (Step 4B)", () => {
+  // Unlike xhr-interceptor.test.ts's unit tests (which stub open/send
+  // directly), these tests exercise createNetworkPlugin's own
+  // install(), which wraps whatever XMLHttpRequest.prototype.open/send
+  // actually are at that moment. Left unstubbed, jsdom's real send()
+  // attempts a genuine network request — observed directly (real DNS
+  // lookups against api.example.com failing, logged to stderr) before
+  // this fix. Stubbing the true originals to inert fakes here, before
+  // install() runs, is what fetch's own equivalent integration tests
+  // get for free from window.fetch resolving to a real implementation
+  // that at least doesn't block on jsdom's separate XHR machinery —
+  // XHR has no such free pass.
+  beforeEach(() => {
+    XMLHttpRequest.prototype.open = vi.fn();
+    XMLHttpRequest.prototype.send = vi.fn();
+  });
+
+  function setStatus(xhr: XMLHttpRequest, status: number): void {
+    Object.defineProperty(xhr, "status", { value: status, configurable: true });
+  }
+
+  it("reports exactly one event for a successful async XHR request", () => {
+    const bus = createEventBus();
+    const network = createNetworkPlugin(bus);
+    network.install();
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("GET", "https://api.example.com/users");
+    xhr.send();
+    setStatus(xhr, 200);
+    xhr.dispatchEvent(new Event("load"));
+    xhr.dispatchEvent(new Event("loadend"));
+
+    expect(bus.getEvents()).toHaveLength(1);
+
+    network.uninstall();
+  });
+
+  it("reports no event when open() happens but send() never does", () => {
+    const bus = createEventBus();
+    const network = createNetworkPlugin(bus);
+    network.install();
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("GET", "https://api.example.com/users");
+    xhr.dispatchEvent(new Event("load"));
+    xhr.dispatchEvent(new Event("loadend"));
+
+    expect(bus.getEvents()).toHaveLength(0);
+
+    network.uninstall();
+  });
+
+  it("does not report anything before install()", () => {
+    const bus = createEventBus();
+    createNetworkPlugin(bus); // never installed
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("GET", "https://api.example.com/users");
+    xhr.send();
+    xhr.dispatchEvent(new Event("load"));
+    xhr.dispatchEvent(new Event("loadend"));
+
+    expect(bus.getEvents()).toHaveLength(0);
+  });
+
+  it("stops reporting after uninstall()", () => {
+    const bus = createEventBus();
+    const network = createNetworkPlugin(bus);
+    network.install();
+    network.uninstall();
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("GET", "https://api.example.com/users");
+    xhr.send();
+    xhr.dispatchEvent(new Event("load"));
+    xhr.dispatchEvent(new Event("loadend"));
+
+    expect(bus.getEvents()).toHaveLength(0);
+  });
+
+  it("reports one event per completed request when an XHR instance is reused sequentially", () => {
+    const bus = createEventBus();
+    const network = createNetworkPlugin(bus);
+    network.install();
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("GET", "https://api.example.com/a");
+    xhr.send();
+    setStatus(xhr, 200);
+    xhr.dispatchEvent(new Event("load"));
+    xhr.dispatchEvent(new Event("loadend"));
+
+    xhr.open("POST", "https://api.example.com/b");
+    xhr.send();
+    setStatus(xhr, 201);
+    xhr.dispatchEvent(new Event("load"));
+    xhr.dispatchEvent(new Event("loadend"));
+
+    expect(bus.getEvents()).toHaveLength(2);
+    expect(bus.getEvents()[0].metadata).toMatchObject({
+      url: "https://api.example.com/a",
+    });
+    expect(bus.getEvents()[1].metadata).toMatchObject({
+      url: "https://api.example.com/b",
+    });
+
+    network.uninstall();
+  });
+
+  it("does not misattribute a later open() call's metadata to an in-flight request's reported event", () => {
+    // The mandatory reuse-hazard test, at the full end-to-end level —
+    // xhr-interceptor.test.ts already proves this at the interceptor
+    // layer directly; this proves it survives all the way through
+    // classification, normalization, and the real Bus.
+    const bus = createEventBus();
+    const network = createNetworkPlugin(bus);
+    network.install();
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("GET", "https://api.example.com/a");
+    xhr.send();
+
+    xhr.open("POST", "https://api.example.com/b"); // never sent
+
+    setStatus(xhr, 200);
+    xhr.dispatchEvent(new Event("load"));
+    xhr.dispatchEvent(new Event("loadend"));
+
+    expect(bus.getEvents()).toHaveLength(1);
+    expect(bus.getEvents()[0].metadata).toMatchObject({
+      method: "GET",
+      url: "https://api.example.com/a",
+    });
+
+    network.uninstall();
+  });
+
+  describe("classification reaches the reported event correctly, for every XHR outcome", () => {
+    function captureOneEvent(
+      settle: (xhr: XMLHttpRequest) => void,
+      url = "https://api.example.com/users"
+    ) {
+      const bus = createEventBus();
+      const network = createNetworkPlugin(bus);
+      network.install();
+
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", url);
+      xhr.send();
+      settle(xhr);
+
+      network.uninstall();
+      return bus.getEvents()[0];
+    }
+
+    it("load, 200 -> success/info", () => {
+      const event = captureOneEvent((xhr) => {
+        setStatus(xhr, 200);
+        xhr.dispatchEvent(new Event("load"));
+        xhr.dispatchEvent(new Event("loadend"));
+      });
+      expect(event.category).toBe("network");
+      expect(event.severity).toBe("info");
+      expect(event.metadata).toMatchObject({ outcome: "success", status: 200 });
+    });
+
+    it("load, 404 -> http-error/warn", () => {
+      const event = captureOneEvent((xhr) => {
+        setStatus(xhr, 404);
+        xhr.dispatchEvent(new Event("load"));
+        xhr.dispatchEvent(new Event("loadend"));
+      });
+      expect(event.severity).toBe("warn");
+      expect(event.metadata).toMatchObject({
+        outcome: "http-error",
+        status: 404,
+      });
+    });
+
+    it("load, 500 -> http-error/error", () => {
+      const event = captureOneEvent((xhr) => {
+        setStatus(xhr, 500);
+        xhr.dispatchEvent(new Event("load"));
+        xhr.dispatchEvent(new Event("loadend"));
+      });
+      expect(event.severity).toBe("error");
+      expect(event.metadata).toMatchObject({
+        outcome: "http-error",
+        status: 500,
+      });
+    });
+
+    it("abort -> aborted/info, status reported as null", () => {
+      const event = captureOneEvent((xhr) => {
+        xhr.dispatchEvent(new Event("abort"));
+        xhr.dispatchEvent(new Event("loadend"));
+      });
+      expect(event.severity).toBe("info");
+      expect(event.metadata).toMatchObject({ outcome: "aborted", status: null });
+    });
+
+    it("timeout -> timeout/warn, status reported as null", () => {
+      const event = captureOneEvent((xhr) => {
+        xhr.dispatchEvent(new Event("timeout"));
+        xhr.dispatchEvent(new Event("loadend"));
+      });
+      expect(event.severity).toBe("warn");
+      expect(event.metadata).toMatchObject({ outcome: "timeout", status: null });
+    });
+
+    it("error -> network-error/error, status reported as null", () => {
+      const event = captureOneEvent((xhr) => {
+        xhr.dispatchEvent(new Event("error"));
+        xhr.dispatchEvent(new Event("loadend"));
+      });
+      expect(event.severity).toBe("error");
+      expect(event.metadata).toMatchObject({
+        outcome: "network-error",
+        status: null,
+      });
+    });
+
+    it("carries the measured duration and the original method/URL through to the reported event", () => {
+      vi.spyOn(performance, "now").mockReturnValueOnce(2000).mockReturnValueOnce(2060);
+      const event = captureOneEvent((xhr) => {
+        setStatus(xhr, 200);
+        xhr.dispatchEvent(new Event("load"));
+        xhr.dispatchEvent(new Event("loadend"));
+      }, "https://api.example.com/orders");
+
+      expect(event.metadata).toMatchObject({
+        method: "POST",
+        url: "https://api.example.com/orders",
+        duration: 60,
+      });
+      expect(event.title).toBe("POST https://api.example.com/orders");
+
+      vi.restoreAllMocks();
+    });
+
+    it("tags the event's origin as 'xhr', distinguishing it from Fetch-sourced events", () => {
+      const event = captureOneEvent((xhr) => {
+        setStatus(xhr, 200);
+        xhr.dispatchEvent(new Event("load"));
+        xhr.dispatchEvent(new Event("loadend"));
+      });
+      expect(event.origin).toBe("xhr");
     });
   });
 });
