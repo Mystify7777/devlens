@@ -18,6 +18,17 @@ export interface EventStoreOptions {
  */
 export interface EventStore {
   add(event: DevLensEvent): void;
+  /**
+   * Append multiple already-valid, already-frozen events in the supplied
+   * order, then notify subscribers exactly once. Performs no validation
+   * and no freezing — that is the caller's responsibility before calling
+   * this method. An empty array is a true no-op: no buffer mutation, no
+   * subscriber notification.
+   */
+  addMany(events: DevLensEvent[]): void;
+  /** The configured maximum number of events this Store retains. Fixed
+   * for the Store's lifetime; does not reflect current fill level. */
+  readonly capacity: number;
   clear(): void;
   getAll(): DevLensEvent[];
   getByCategory(category: EventCategory): DevLensEvent[];
@@ -41,6 +52,16 @@ export function createEventStore(options: EventStoreOptions = {}): EventStore {
     add(event) {
       buffer.push(event);
       notify(event);
+    },
+    addMany(events) {
+      if (events.length === 0) return;
+      for (const event of events) {
+        buffer.push(event);
+      }
+      notify(events[events.length - 1]);
+    },
+    get capacity() {
+      return maxEvents;
     },
     clear() {
       buffer.clear();

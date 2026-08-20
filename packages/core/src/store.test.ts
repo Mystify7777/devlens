@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { createEventBus } from "./event-bus";
 import { createEventStore } from "./store";
 import { connectStoreToBus } from "./store-bus-connector";
+import { DEFAULT_STORE_SIZE } from "./constants";
 import type { DevLensEventInput } from "./types";
 
 function baseInput(overrides: Partial<DevLensEventInput> = {}): DevLensEventInput {
@@ -66,6 +67,115 @@ describe("EventStore (standalone, no bus)", () => {
     store.add(bus.report(baseInput({ title: "two" })));
     store.add(bus.report(baseInput({ title: "three" })));
     expect(store.getAll().map((e) => e.title)).toEqual(["two", "three"]);
+  });
+});
+
+describe("EventStore.capacity", () => {
+  it("returns the configured maxEvents value", () => {
+    const store = createEventStore({ maxEvents: 500 });
+    expect(store.capacity).toBe(500);
+  });
+
+  it("defaults to DEFAULT_STORE_SIZE when maxEvents is not specified", () => {
+    const store = createEventStore();
+    expect(store.capacity).toBe(DEFAULT_STORE_SIZE);
+  });
+
+  it("is unchanged after add()", () => {
+    const store = createEventStore({ maxEvents: 5 });
+    const bus = createEventBus();
+    store.add(bus.report(baseInput()));
+    expect(store.capacity).toBe(5);
+  });
+
+  it("is unchanged after clear()", () => {
+    const store = createEventStore({ maxEvents: 5 });
+    const bus = createEventBus();
+    store.add(bus.report(baseInput()));
+    store.clear();
+    expect(store.capacity).toBe(5);
+  });
+
+  it("is unchanged after RingBuffer eviction", () => {
+    const store = createEventStore({ maxEvents: 2 });
+    const bus = createEventBus();
+    store.add(bus.report(baseInput({ title: "one" })));
+    store.add(bus.report(baseInput({ title: "two" })));
+    store.add(bus.report(baseInput({ title: "three" }))); // evicts "one"
+    expect(store.capacity).toBe(2);
+  });
+});
+
+describe("EventStore.addMany()", () => {
+  it("preserves supplied event order", () => {
+    const store = createEventStore();
+    const bus = createEventBus();
+    const a = bus.report(baseInput({ title: "alpha" }));
+    const b = bus.report(baseInput({ title: "beta" }));
+    const c = bus.report(baseInput({ title: "gamma" }));
+    store.addMany([a, b, c]);
+    expect(store.getAll().map((e) => e.title)).toEqual(["alpha", "beta", "gamma"]);
+  });
+
+  it("notifies subscribers exactly once for a non-empty batch", () => {
+    const store = createEventStore();
+    const bus = createEventBus();
+    const handler = vi.fn();
+    store.subscribe(handler);
+    const a = bus.report(baseInput({ title: "one" }));
+    const b = bus.report(baseInput({ title: "two" }));
+    const c = bus.report(baseInput({ title: "three" }));
+    store.addMany([a, b, c]);
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it("is a true no-op for an empty array — no mutation, no notification", () => {
+    const store = createEventStore();
+    const handler = vi.fn();
+    store.subscribe(handler);
+    store.addMany([]);
+    expect(store.getAll()).toHaveLength(0);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("follows normal RingBuffer eviction for an oversized batch", () => {
+    const store = createEventStore({ maxEvents: 3 });
+    const bus = createEventBus();
+    const events = ["a", "b", "c", "d", "e"].map((t) =>
+      bus.report(baseInput({ title: t }))
+    );
+    store.addMany(events); // 5 events, capacity 3 → oldest 2 evicted
+    expect(store.getAll().map((e) => e.title)).toEqual(["c", "d", "e"]);
+    expect(store.getAll()).toHaveLength(3);
+  });
+
+  it("performs no validation — stores whatever it is given without throwing", () => {
+    const store = createEventStore();
+    const bus = createEventBus();
+    const valid = bus.report(baseInput({ title: "real" }));
+    // Pass an unrecognised extra field via cast; addMany() must not inspect it
+    const withExtra = { ...valid, unknownField: "sneaky" } as unknown as import("./types").DevLensEvent;
+    expect(() => store.addMany([withExtra])).not.toThrow();
+    expect(store.getAll()).toHaveLength(1);
+  });
+
+  it("performs no freezing — returned events are whatever was passed in", () => {
+    const store = createEventStore();
+    const bus = createEventBus();
+    const event = bus.report(baseInput()); // already frozen by bus.report
+    store.addMany([event]);
+    // The event in the store is the exact same reference (not re-frozen)
+    expect(store.getAll()[0]).toBe(event);
+  });
+
+  it("single-event addMany and add leave the store in the same state", () => {
+    const bus = createEventBus();
+    const storeA = createEventStore();
+    const storeB = createEventStore();
+    const event = bus.report(baseInput({ title: "same" }));
+    storeA.add(event);
+    storeB.addMany([event]);
+    expect(storeA.getAll()).toEqual(storeB.getAll());
   });
 });
 

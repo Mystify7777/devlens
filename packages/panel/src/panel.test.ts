@@ -73,6 +73,14 @@ function createFakeStore(initialEvents: DevLensEvent[] = []): FakeEventStore {
         subscribers.delete(handler);
       };
     },
+    addMany(newEvents: DevLensEvent[]) {
+      if (newEvents.length === 0) return;
+      events = [...events, ...newEvents];
+      notify(newEvents[newEvents.length - 1]);
+    },
+    get capacity() {
+      return 10000;
+    },
     destroy() {
       subscribers.clear();
       events = [];
