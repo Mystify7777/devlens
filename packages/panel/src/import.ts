@@ -1,4 +1,4 @@
-import type { DevLensEvent, EventStore } from "@devlens/core";
+import { deepFreeze, type DevLensEvent, type EventStore } from "@devlens/core";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -397,4 +397,45 @@ export function validateImportSession(
   }
 
   return validationResult;
+}
+
+// ---------------------------------------------------------------------------
+// Public entry point
+// ---------------------------------------------------------------------------
+
+/**
+ * Restore a previously exported DevLensEvent[] session into an empty
+ * EventStore, preserving each event's original id, timestamp, and the
+ * serialized array's order exactly.
+ *
+ * Pipeline:
+ *   raw JSON → validateImportSession() (parse, Store preconditions,
+ *   event validation, intra-batch + Store-side id checks) → deepFreeze
+ *   every validated event → store.addMany() → { ok: true, importedCount }
+ *
+ * Never throws for ordinary malformed input — see ImportError for the
+ * structured failure contract. On any failure, the Store is left
+ * completely untouched: validateImportSession() only mutates nothing
+ * itself, and this function does not call store.addMany() unless
+ * validation succeeded in full.
+ *
+ * Does not regenerate or normalize any field — the frozen events added
+ * to the Store are exactly what was in the imported JSON, id and
+ * timestamp included.
+ */
+export function importSession(input: string, store: EventStore): ImportResult {
+  const validationResult = validateImportSession(input, store);
+  if (!validationResult.ok) {
+    return { ok: false, error: validationResult.error };
+  }
+
+  const frozenEvents = validationResult.events.map((event) => deepFreeze(event));
+
+  // addMany([]) is itself a no-op (no mutation, no notification) per its
+  // own contract — calling it unconditionally here for a zero-length batch
+  // is equivalent to skipping the call, and keeps this function's logic
+  // uniform rather than special-casing the empty-import path.
+  store.addMany(frozenEvents);
+
+  return { ok: true, importedCount: frozenEvents.length };
 }

@@ -4,9 +4,12 @@ import {
   validateEvent,
   validateAllEvents,
   validateImportSession,
+  importSession,
 } from "./import";
 import type { ImportError } from "./import";
+import { createEventStore } from "@devlens/core";
 import type { DevLensEvent, EventStore } from "@devlens/core";
+import { serializeEvents } from "./serialize";
 
 // ---------------------------------------------------------------------------
 // Minimal valid event fixture — every required field, no optional fields.
@@ -648,5 +651,218 @@ describe("validateImportSession — defense-in-depth note", () => {
     // test output rather than silently absent. The actual defensive code is
     // in validateImportSession(); the intent is recorded here.
     expect(true).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// importSession — the public entry point
+// ---------------------------------------------------------------------------
+
+describe("importSession — successful import", () => {
+  it("returns ok: true for a valid import into an empty Store", () => {
+    const store = createEventStore();
+    const result = importSession(
+      JSON.stringify([validEvent({ id: "a" }), validEvent({ id: "b" })]),
+      store
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it("reports the correct importedCount", () => {
+    const store = createEventStore();
+    const result = importSession(
+      JSON.stringify([validEvent({ id: "a" }), validEvent({ id: "b" }), validEvent({ id: "c" })]),
+      store
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.importedCount).toBe(3);
+  });
+
+  it("freezes every imported event", () => {
+    const store = createEventStore();
+    importSession(JSON.stringify([validEvent({ id: "a" })]), store);
+    const [event] = store.getAll();
+    expect(Object.isFrozen(event)).toBe(true);
+  });
+
+  it("freezes nested structures (metadata/context), not just the top-level event", () => {
+    const store = createEventStore();
+    importSession(
+      JSON.stringify([
+        validEvent({
+          id: "a",
+          metadata: { nested: { deeper: "value" } },
+          context: { alsoNested: { evenDeeper: true } },
+        }),
+      ]),
+      store
+    );
+    const [event] = store.getAll();
+    expect(Object.isFrozen(event.metadata)).toBe(true);
+    expect(Object.isFrozen((event.metadata as any).nested)).toBe(true);
+    expect(Object.isFrozen(event.context)).toBe(true);
+    expect(Object.isFrozen((event.context as any).alsoNested)).toBe(true);
+  });
+
+  it("preserves original id and timestamp exactly — no regeneration", () => {
+    const store = createEventStore();
+    importSession(
+      JSON.stringify([validEvent({ id: "historical-id-123", timestamp: 987654321 })]),
+      store
+    );
+    const [event] = store.getAll();
+    expect(event.id).toBe("historical-id-123");
+    expect(event.timestamp).toBe(987654321);
+  });
+
+  it("calls store.addMany() exactly once for a non-empty import", () => {
+    const store = createEventStore();
+    const addManySpy = vi.spyOn(store, "addMany");
+    importSession(
+      JSON.stringify([validEvent({ id: "a" }), validEvent({ id: "b" })]),
+      store
+    );
+    expect(addManySpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves event order", () => {
+    const store = createEventStore();
+    importSession(
+      JSON.stringify([
+        validEvent({ id: "1", title: "First" }),
+        validEvent({ id: "2", title: "Second" }),
+        validEvent({ id: "3", title: "Third" }),
+      ]),
+      store
+    );
+    expect(store.getAll().map((e) => e.title)).toEqual(["First", "Second", "Third"]);
+  });
+
+  it("imported events are retrievable from the Store afterward", () => {
+    const store = createEventStore();
+    importSession(
+      JSON.stringify([validEvent({ id: "retrievable", title: "Findable" })]),
+      store
+    );
+    const found = store.getAll().find((e) => e.id === "retrievable");
+    expect(found).toBeDefined();
+    expect(found?.title).toBe("Findable");
+  });
+});
+
+describe("importSession — empty import", () => {
+  it("returns ok: true with importedCount: 0 for an empty array", () => {
+    const store = createEventStore();
+    const result = importSession("[]", store);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.importedCount).toBe(0);
+  });
+
+  it("does not mutate the Store for an empty import", () => {
+    const store = createEventStore();
+    importSession("[]", store);
+    expect(store.getAll()).toEqual([]);
+  });
+
+  it("produces no subscriber notification for an empty import — addMany([]) is a true no-op", () => {
+    // This behavior follows directly from EventStore.addMany()'s own
+    // contract (Milestone 1): addMany([]) performs no mutation and no
+    // notification. importSession() calls addMany() unconditionally rather
+    // than special-casing the empty array, relying on that existing
+    // contract instead of duplicating it here.
+    const store = createEventStore();
+    const handler = vi.fn();
+    store.subscribe(handler);
+    importSession("[]", store);
+    expect(handler).not.toHaveBeenCalled();
+  });
+});
+
+describe("importSession — failure leaves the Store untouched", () => {
+  it("malformed JSON leaves the Store untouched", () => {
+    const store = createEventStore();
+    const result = importSession("{not valid json", store);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("invalid-json");
+    expect(store.getAll()).toEqual([]);
+  });
+
+  it("an event-level validation failure leaves the Store untouched", () => {
+    const store = createEventStore();
+    const result = importSession(
+      JSON.stringify([validEvent({ id: "a" }), validEvent({ id: "b", version: 2 })]),
+      store
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("unsupported-version");
+    expect(store.getAll()).toEqual([]);
+  });
+
+  it("importing into a non-empty Store leaves its original contents untouched", () => {
+    const store = createEventStore();
+    // Seed the Store directly via addMany (bypassing importSession, which
+    // would itself refuse a non-empty target — this establishes the
+    // pre-existing state under test).
+    const preExisting = validEvent({ id: "pre-existing" }) as unknown as DevLensEvent;
+    store.addMany([preExisting]);
+
+    const result = importSession(JSON.stringify([validEvent({ id: "new" })]), store);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("store-not-empty");
+    expect(store.getAll()).toHaveLength(1);
+    expect(store.getAll()[0].id).toBe("pre-existing");
+  });
+
+  it("an oversized import leaves the Store untouched", () => {
+    const store = createEventStore({ maxEvents: 2 });
+    const result = importSession(
+      JSON.stringify([validEvent({ id: "a" }), validEvent({ id: "b" }), validEvent({ id: "c" })]),
+      store
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("import-too-large");
+    expect(store.getAll()).toEqual([]);
+  });
+
+  it("does not call store.addMany() at all when validation fails", () => {
+    const store = createEventStore();
+    const addManySpy = vi.spyOn(store, "addMany");
+    importSession(JSON.stringify([validEvent({ version: 2 })]), store);
+    expect(addManySpy).not.toHaveBeenCalled();
+  });
+
+  it("never throws for malformed input", () => {
+    const store = createEventStore();
+    expect(() => importSession("not json at all {{{", store)).not.toThrow();
+    expect(() => importSession(JSON.stringify({ not: "an array" }), store)).not.toThrow();
+    expect(() => importSession(JSON.stringify([{ missing: "everything" }]), store)).not.toThrow();
+  });
+});
+
+describe("importSession — round-trip property", () => {
+  it("export → import produces equivalent events in an empty target Store", () => {
+    const sourceStore = createEventStore();
+    const original = [
+      validEvent({ id: "rt-1", title: "Alpha", timestamp: 111 }),
+      validEvent({ id: "rt-2", title: "Beta", timestamp: 222 }),
+      validEvent({ id: "rt-3", title: "Gamma", timestamp: 333 }),
+    ] as unknown as DevLensEvent[];
+    sourceStore.addMany(original);
+
+    const exported = serializeEvents(sourceStore.getAll());
+
+    const targetStore = createEventStore();
+    const result = importSession(exported, targetStore);
+
+    expect(result.ok).toBe(true);
+    const restored = targetStore.getAll();
+    const sourceEvents = sourceStore.getAll();
+    expect(restored).toHaveLength(sourceEvents.length);
+    for (let i = 0; i < sourceEvents.length; i++) {
+      expect(restored[i].id).toBe(sourceEvents[i].id);
+      expect(restored[i].timestamp).toBe(sourceEvents[i].timestamp);
+      expect(restored[i].title).toBe(sourceEvents[i].title);
+      expect(restored[i].version).toBe(sourceEvents[i].version);
+    }
   });
 });
