@@ -171,16 +171,19 @@ full architectural history and reasoning behind each decision.
 Interactive inspection of captured events — inspector, filtering,
 search, keyboard navigation, and the pause/resume/clear/export
 operational layer — is complete (see `docs/specs/inspection.md` and
-`docs/adr/0009-v0.3.0-direction.md`, Option A, Accepted). Export/import
-here means exporting a session as JSON; import itself is still out of
-scope, deliberately not designed ahead of a real consumer.
+`docs/adr/0009-v0.3.0-direction.md`, Option A, Accepted). Session
+Import is also complete: `importSession()` restores a previously
+exported session into an empty `EventStore`, preserving original
+`id`/`timestamp` and array order exactly (see
+`docs/specs/session-import.md` and `docs/adr/0011-session-import.md`,
+Accepted).
 
 Not yet committed to — this is a proposed direction, open for
 discussion rather than a locked sequence:
 
-- Network capture (`@devlens/network`)
-- Import for previously-exported sessions
 - React wrapper around the Panel (`@devlens/react`)
+- Further Network capture metadata (URL normalization, Content-Type,
+  response size — see `docs/research/network-capture.md`, Open Issues)
 
 ---
 

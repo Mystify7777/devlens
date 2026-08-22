@@ -2,12 +2,17 @@
 
 ## Status
 
-Draft, derived from [ADR-0011](../adr/0011-session-import.md)
-(Accepted). This spec resolves the two implementation-level questions
-ADR-0011 deliberately left open — the validation result/error shape
-and validation sequencing — plus the concrete function signatures,
-file layout, and test requirements the ADR doesn't own. It does not
-re-argue anything ADR-0011 settled; see that document and
+Implemented. Frozen 2026-08-14, implemented across Milestones 1–4
+(Core `addMany()`/`capacity`; pure parsing/validation leaves; Store
+precondition composition; public `importSession()` entry point) —
+584/584 workspace tests passing, clean typecheck, clean build,
+verified 2026-08-14. Derived from
+[ADR-0011](../adr/0011-session-import.md) (Accepted). This spec
+resolves the two implementation-level questions ADR-0011 deliberately
+left open — the validation result/error shape and validation
+sequencing — plus the concrete function signatures, file layout, and
+test requirements the ADR doesn't own. It does not re-argue anything
+ADR-0011 settled; see that document and
 [`docs/research/session-import.md`](../research/session-import.md)
 for the architectural reasoning behind each constraint referenced
 here.
@@ -43,6 +48,7 @@ serialized array's ordering exactly.
 
 **Round-trip invariant**, established by ADR-0011 and restated here as
 the property implementation must satisfy:
+
 ```text
 A → export(A) → import(export(A)) → B
 A[i] ≡ B[i]   for every i
@@ -197,6 +203,7 @@ nothing today can ask a Store "how large are you allowed to grow."
 Condition 11 cannot be implemented without this. This spec therefore
 adds one further narrow read-only accessor to `EventStore`, alongside
 `addMany()`:
+
 ```ts
 interface EventStore {
   // ...existing methods, unchanged...
@@ -204,6 +211,7 @@ interface EventStore {
   readonly capacity: number;
 }
 ```
+
 Justified on the same narrow grounds as `addMany()` itself
 (ADR-0011 Decision 9): a concrete, demonstrated need, not speculative
 API surface. `capacity` returns the Store's configured `maxEvents`
@@ -245,6 +253,7 @@ not assumed here.
    collect or aggregate multiple violations before reporting.
 
 Full sequence:
+
 ```text
 parse JSON (condition 1)
   ↓
@@ -422,9 +431,40 @@ is DOM-free and lives in `@devlens/panel`, not a specific internal
 module split. If validation logic grows large enough to warrant its
 own file, that's an implementation-time call, not a spec requirement.
 
+**Implemented naming (added post-implementation, for reference — not a
+retroactive rename of this spec's illustrative names above, which were
+never contractual):**
+
+```text
+parseImportInput(raw)                      — conditions 1–3
+validateEvent(value, eventIndex)           — conditions 4–7, one event
+validateAllEvents(values)                  — conditions 4–8, whole array,
+                                              Store-independent
+validateImportSession(raw, store)          — adds conditions 9–11 (Store
+                                              preconditions + Store-side
+                                              collision defense-in-depth);
+                                              not anticipated by name
+                                              above — emerged as the
+                                              natural home for Store
+                                              preconditions once
+                                              implementation reached that
+                                              layer
+importSession(input, store)                — public entry point, matches
+                                              this spec's naming exactly
+```
+
+`validateEvent`/`validateAllEvents`/`validateImportSession` are all
+exported from `import.ts` for direct unit testing (per this section's
+own allowance), but only `importSession` (plus `ImportResult`/
+`ImportError`) is re-exported from `packages/panel/src/index.ts` — the
+actual public boundary. This section is updated to reflect what
+shipped; `docs/research/session-import.md` is left as the historical
+record of the design conversation and is not edited to match.
+
 ## Testing requirements
 
-**Valid imports**
+**Valid imports**:
+
 - Empty array imports successfully (`importedCount: 0`), Store remains
   empty, **no** `notify()` call occurs — an empty batch is not a Store
   state transition (see `EventStore.addMany()` contract, above; worth
@@ -442,6 +482,7 @@ own file, that's an implementation-time call, not a spec requirement.
 
 **Invalid imports** — each must leave the Store completely untouched
 and return the correspondingly specific `ImportError` code:
+
 - Malformed JSON (`invalid-json`)
 - Parsed JSON is not an array — object, string, number, `null`
   (`not-an-array`)
@@ -491,7 +532,8 @@ directly against a non-empty existing-ids set; this is left to
 implementation's discretion and is not a required test for this
 milestone.
 
-**Atomicity**
+**Atomicity**:
+
 - A large array (e.g. 100+ events) with one invalid event anywhere in
   the array (first, middle, and last position — three separate tests)
   results in zero events added to the Store.
@@ -499,6 +541,7 @@ milestone.
 
 **`EventStore.addMany()` and `capacity` (Core-level, separate from
 Import's own tests)**
+
 - `capacity` returns the configured `maxEvents` value passed to
   `createEventStore()`.
 - `capacity` returns `DEFAULT_STORE_SIZE` when `maxEvents` was not
@@ -518,7 +561,8 @@ Import's own tests)**
   `addMany()`'s concern; this test exists to confirm `addMany()`
   doesn't accidentally start doing Import's job.
 
-**Round trip**
+**Round trip**:
+
 - `store.getAll()` before export, compared element-by-element against
   `store.getAll()` of a fresh Store after
   `importSession(serializeEvents(originalEvents), freshStore)` —

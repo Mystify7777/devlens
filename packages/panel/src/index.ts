@@ -10,3 +10,5 @@ export { MAX_RENDERED_EVENTS } from "./constants";
 export { applyFilters, createEmptyFilterState } from "./filters";
 export type { FilterState } from "./filters";
 export { applySearch } from "./search";
+export { importSession } from "./import";
+export type { ImportResult, ImportError } from "./import";

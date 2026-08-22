@@ -866,3 +866,35 @@ describe("importSession — round-trip property", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Public API surface — package boundary integration
+// ---------------------------------------------------------------------------
+
+// These tests import from the package's actual public entry point
+// (./index), not from ./import directly, as an external consumer of
+// @devlens/panel would. Every other test in this file imports from
+// ./import, which would still pass even if index.ts's re-export were
+// accidentally removed — as it in fact was, until this review found it
+// missing despite 584 passing workspace tests. These tests exist
+// specifically to catch that class of regression.
+describe("public API surface (packages/panel/src/index.ts)", () => {
+  it("importSession is reachable from the package's public entry point and works end-to-end", async () => {
+    const { importSession: publicImportSession } = await import("./index");
+    const store = createEventStore();
+    const result = publicImportSession(
+      JSON.stringify([validEvent({ id: "public-api-check" })]),
+      store
+    );
+    expect(result.ok).toBe(true);
+    expect(store.getAll()[0]?.id).toBe("public-api-check");
+  });
+
+  it("does not re-export internal validation helpers from the public entry point", async () => {
+    const publicApi = await import("./index");
+    expect("parseImportInput" in publicApi).toBe(false);
+    expect("validateEvent" in publicApi).toBe(false);
+    expect("validateAllEvents" in publicApi).toBe(false);
+    expect("validateImportSession" in publicApi).toBe(false);
+  });
+});
