@@ -10,6 +10,7 @@ import { applyFilters, createEmptyFilterState, type FilterState } from "./filter
 import { applySearch } from "./search";
 import { computeNavigationTarget, type NavigationDirection } from "./navigation";
 import { serializeEvents } from "./serialize";
+import { importSession, type ImportResult } from "./import";
 
 /**
  * Panel's public surface, extended by seven seams beyond Plugin:
@@ -228,6 +229,33 @@ export function createPanel(store: EventStore): PanelController {
     return isPaused;
   }
 
+  // Import: restores a previously exported session. Internal only —
+  // not part of PanelController — wired directly into
+  // createSessionControls() below. Deliberately NOT unconditional
+  // about calling updateEventList() afterward, unlike clear():
+  //
+  // - store.addMany() (called inside importSession(), on success)
+  //   DOES notify(), unlike store.clear(). When the Panel isn't
+  //   paused, that notification already reaches handleStoreUpdate()
+  //   and refreshes the render — calling updateEventList() again here
+  //   would just be a redundant second render of the same state.
+  // - When the Panel IS paused, handleStoreUpdate() ignores that same
+  //   notification (that's the whole point of pause), so nothing
+  //   would refresh the Panel at all unless this function refreshes
+  //   it explicitly. Import is an explicit user action, like Clear/
+  //   Resume/setFilters — it should always be reflected immediately,
+  //   regardless of pause state.
+  //
+  // Net effect: call updateEventList() only when paused; when
+  // running, defer to the notification Store already sent.
+  function importFromSession(input: string): ImportResult {
+    const result = importSession(input, store);
+    if (result.ok && isPaused) {
+      updateEventList();
+    }
+    return result;
+  }
+
   return {
     install() {
       if (installed) return;
@@ -249,6 +277,7 @@ export function createPanel(store: EventStore): PanelController {
         onClear: clear,
         onExport: exportEvents,
         isPaused: getIsPaused,
+        onImport: importFromSession,
       });
       overlay.shadowRoot.append(
         toolbar.element,

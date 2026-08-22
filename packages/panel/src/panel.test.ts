@@ -2,6 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type { DevLensEvent, EventStore } from "@devlens/core";
 import { createPanel } from "./panel";
+import { serializeEvents } from "./serialize";
 
 let idCounter = 0;
 
@@ -1802,6 +1803,196 @@ describe("createPanel session controls, mounted end-to-end", () => {
         "Console Event",
         "Runtime Event",
       ]);
+
+      panel.uninstall();
+    });
+  });
+
+  // Session Restore UI: exercises the mounted Import button. Unlike
+  // Export (a pure, synchronous operation), file selection resolves
+  // asynchronously via File.text() — jsdom's File lacks .text()
+  // entirely, so selection is driven the same way
+  // session-controls.test.ts drives it: a stub object satisfying only
+  // { text(): Promise<string> }, assigned directly to the input's
+  // `files` property.
+  describe("clicking Import", () => {
+    function getImportInput(): HTMLInputElement {
+      const el = getPanelRoot()?.querySelector<HTMLInputElement>(
+        "[data-devlens-session-import-input]"
+      );
+      if (!el) throw new Error("import input not found");
+      return el;
+    }
+
+    function getImportStatus(): HTMLElement {
+      const el = getPanelRoot()?.querySelector<HTMLElement>(
+        "[data-devlens-session-import-status]"
+      );
+      if (!el) throw new Error("import status region not found");
+      return el;
+    }
+
+    function selectFile(contents: string): void {
+      const input = getImportInput();
+      Object.defineProperty(input, "files", {
+        value: [{ text: () => Promise.resolve(contents) }],
+        configurable: true,
+      });
+      input.dispatchEvent(new Event("change"));
+    }
+
+    it("renders an Import button alongside Pause/Clear/Export, wired to a JSON file input", () => {
+      const panel = createPanel(createFakeStore());
+      panel.install();
+
+      expect(
+        getPanelRoot()?.querySelector("[data-devlens-session-import-button]")
+      ).not.toBeNull();
+      // Confirms the browser-facing wiring (accept filter) survived
+      // composition into the mounted Panel — finer-grained input
+      // details beyond this belong to session-controls.test.ts.
+      expect(getImportInput().accept).toBe("application/json");
+
+      panel.uninstall();
+    });
+
+    describe("while running (not paused)", () => {
+      it("restores events into the Store and rendered list while running", async () => {
+        const store = createFakeStore();
+        const exportedJson = serializeEvents([
+          makeEvent({ title: "Restored Event" }),
+        ]);
+        const panel = createPanel(store);
+        panel.install();
+
+        expect(panel.isPaused()).toBe(false);
+        selectFile(exportedJson);
+
+        await vi.waitFor(() =>
+          expect(renderedTitles()).toEqual(["Restored Event"])
+        );
+        expect(store.getAll()).toHaveLength(1);
+
+        panel.uninstall();
+      });
+    });
+
+    describe("while paused", () => {
+      it("restores events into the Store and still refreshes the rendered list immediately, despite pause suppressing automatic refresh", async () => {
+        const store = createFakeStore();
+        const exportedJson = serializeEvents([
+          makeEvent({ title: "Restored While Paused" }),
+        ]);
+        const panel = createPanel(store);
+        panel.install();
+
+        panel.pause();
+        selectFile(exportedJson);
+
+        // If this only relied on the Store's addMany() notification
+        // (which handleStoreUpdate ignores while paused), the render
+        // would never happen — this asserts the explicit
+        // updateEventList() call that pause requires actually fires.
+        await vi.waitFor(() =>
+          expect(renderedTitles()).toEqual(["Restored While Paused"])
+        );
+        expect(store.getAll()).toHaveLength(1);
+        expect(panel.isPaused()).toBe(true); // import doesn't resume
+
+        panel.uninstall();
+      });
+    });
+
+    it("leaves an existing, non-empty Store untouched and reports store-not-empty", async () => {
+      const store = createFakeStore([makeEvent({ title: "Existing Event" })]);
+      const exportedJson = serializeEvents([
+        makeEvent({ title: "Would-Be Restored Event" }),
+      ]);
+      const panel = createPanel(store);
+      panel.install();
+
+      selectFile(exportedJson);
+
+      await vi.waitFor(() =>
+        expect(getImportStatus().textContent).toMatch(/clear/i)
+      );
+      expect(store.getAll().map((e) => e.title)).toEqual(["Existing Event"]);
+      expect(renderedTitles()).toEqual(["Existing Event"]);
+
+      panel.uninstall();
+    });
+
+    it("leaves the Store untouched when the selected file contains malformed JSON", async () => {
+      const store = createFakeStore();
+      const panel = createPanel(store);
+      panel.install();
+
+      selectFile("not valid json{{{");
+
+      await vi.waitFor(() =>
+        expect(getImportStatus().textContent).not.toBe("")
+      );
+      expect(store.getAll()).toEqual([]);
+      expect(renderedTitles()).toEqual([]);
+
+      panel.uninstall();
+    });
+
+    it("leaves the Store untouched and shows a read-failure message when the file can't be read", async () => {
+      const store = createFakeStore();
+      const panel = createPanel(store);
+      panel.install();
+
+      const input = getImportInput();
+      Object.defineProperty(input, "files", {
+        value: [{ text: () => Promise.reject(new Error("boom")) }],
+        configurable: true,
+      });
+      input.dispatchEvent(new Event("change"));
+
+      await vi.waitFor(() =>
+        expect(getImportStatus().textContent).toContain("Could not read")
+      );
+      expect(store.getAll()).toEqual([]);
+
+      panel.uninstall();
+    });
+
+    it("does nothing when the native picker is cancelled", () => {
+      const store = createFakeStore();
+      const panel = createPanel(store);
+      panel.install();
+
+      const input = getImportInput();
+      Object.defineProperty(input, "files", {
+        value: [],
+        configurable: true,
+      });
+      input.dispatchEvent(new Event("change"));
+
+      expect(store.getAll()).toEqual([]);
+      expect(getImportStatus().textContent).toBe("");
+
+      panel.uninstall();
+    });
+
+    it("round-trips: exporting the Store and importing it into a fresh Panel reproduces the events through the real rendering pipeline", async () => {
+      const sourceStore = createFakeStore([
+        makeEvent({ title: "Round Trip Event", message: "hello" }),
+      ]);
+      const exportedJson = serializeEvents(sourceStore.getAll());
+
+      const freshStore = createFakeStore();
+      const panel = createPanel(freshStore);
+      panel.install();
+
+      selectFile(exportedJson);
+
+      await vi.waitFor(() =>
+        expect(renderedTitles()).toEqual(["Round Trip Event"])
+      );
+      expect(freshStore.getAll()[0].id).toBe(sourceStore.getAll()[0].id);
+      expect(freshStore.getAll()[0].message).toBe("hello");
 
       panel.uninstall();
     });

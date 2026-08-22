@@ -4,6 +4,7 @@ import {
   sessionExportFilename,
   type SessionControlsHandlers,
 } from "./session-controls";
+import type { ImportResult } from "../import";
 
 function getPauseButton(root: HTMLElement): HTMLButtonElement {
   const el = root.querySelector<HTMLButtonElement>(
@@ -29,6 +30,57 @@ function getExportButton(root: HTMLElement): HTMLButtonElement {
   return el;
 }
 
+function getImportButton(root: HTMLElement): HTMLButtonElement {
+  const el = root.querySelector<HTMLButtonElement>(
+    "[data-devlens-session-import-button]"
+  );
+  if (!el) throw new Error("import button not found");
+  return el;
+}
+
+function getImportInput(root: HTMLElement): HTMLInputElement {
+  const el = root.querySelector<HTMLInputElement>(
+    "[data-devlens-session-import-input]"
+  );
+  if (!el) throw new Error("import input not found");
+  return el;
+}
+
+function getImportStatus(root: HTMLElement): HTMLElement {
+  const el = root.querySelector<HTMLElement>(
+    "[data-devlens-session-import-status]"
+  );
+  if (!el) throw new Error("import status region not found");
+  return el;
+}
+
+/**
+ * jsdom's File lacks .text() entirely (the same gap documented for
+ * Blob elsewhere in this file) — stubbed here rather than relying on
+ * jsdom's incomplete File API. `resolveWith`/`rejectWith` let a test
+ * control the read outcome directly, which is what's actually under
+ * test (session-controls.ts's handling of both outcomes), not
+ * jsdom's file-reading fidelity.
+ */
+function selectFile(
+  input: HTMLInputElement,
+  file: { text: () => Promise<string> }
+): void {
+  Object.defineProperty(input, "files", {
+    value: [file],
+    configurable: true,
+  });
+  input.dispatchEvent(new Event("change"));
+}
+
+function fakeFile(contents: string): { text: () => Promise<string> } {
+  return { text: () => Promise.resolve(contents) };
+}
+
+function unreadableFile(): { text: () => Promise<string> } {
+  return { text: () => Promise.reject(new Error("read error")) };
+}
+
 function makeHandlers(
   overrides: Partial<SessionControlsHandlers> = {}
 ): SessionControlsHandlers {
@@ -38,6 +90,9 @@ function makeHandlers(
     onClear: vi.fn(),
     onExport: vi.fn(() => "[]"),
     isPaused: vi.fn(() => false),
+    onImport: vi.fn(
+      (): ImportResult => ({ ok: true, importedCount: 0 })
+    ),
     ...overrides,
   };
 }
@@ -50,9 +105,9 @@ describe("createSessionControls", () => {
     ).toBe(true);
   });
 
-  it("renders exactly three buttons: pause/resume, clear, export", () => {
+  it("renders exactly four buttons: pause/resume, clear, export, import", () => {
     const controls = createSessionControls(makeHandlers());
-    expect(controls.element.querySelectorAll("button")).toHaveLength(3);
+    expect(controls.element.querySelectorAll("button")).toHaveLength(4);
   });
 
   describe("pause/resume toggle", () => {
@@ -247,6 +302,170 @@ describe("createSessionControls", () => {
       expect(capturedAnchor?.getAttribute("download")).toMatch(
         /^devlens-session-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.json$/
       );
+    });
+  });
+
+  describe("import button", () => {
+    it("clicking Import triggers the native file picker", () => {
+      const controls = createSessionControls(makeHandlers());
+      const input = getImportInput(controls.element);
+      const clickSpy = vi.spyOn(input, "click");
+
+      getImportButton(controls.element).click();
+
+      expect(clickSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not call onImport() before any interaction", () => {
+      const handlers = makeHandlers();
+      createSessionControls(handlers);
+      expect(handlers.onImport).not.toHaveBeenCalled();
+    });
+
+    it("selecting a file calls onImport() with the file's text contents", async () => {
+      const handlers = makeHandlers();
+      const controls = createSessionControls(handlers);
+
+      selectFile(getImportInput(controls.element), fakeFile('[{"id":"e1"}]'));
+      await vi.waitFor(() =>
+        expect(handlers.onImport).toHaveBeenCalledTimes(1)
+      );
+
+      expect(handlers.onImport).toHaveBeenCalledWith('[{"id":"e1"}]');
+    });
+
+    it("cancelling the picker (no file selected) does not call onImport()", () => {
+      const handlers = makeHandlers();
+      const controls = createSessionControls(handlers);
+      const input = getImportInput(controls.element);
+
+      Object.defineProperty(input, "files", {
+        value: [],
+        configurable: true,
+      });
+      input.dispatchEvent(new Event("change"));
+
+      expect(handlers.onImport).not.toHaveBeenCalled();
+    });
+
+    it("shows a success status message after a successful import", async () => {
+      const handlers = makeHandlers({
+        onImport: vi.fn((): ImportResult => ({ ok: true, importedCount: 3 })),
+      });
+      const controls = createSessionControls(handlers);
+
+      selectFile(getImportInput(controls.element), fakeFile("[]"));
+
+      const status = getImportStatus(controls.element);
+      await vi.waitFor(() => expect(status.textContent).toContain("3"));
+
+      expect(status.getAttribute("data-devlens-session-import-outcome")).toBe(
+        "success"
+      );
+    });
+
+    it("shows the store-not-empty message pointing at Clear when the Store isn't empty", async () => {
+      const handlers = makeHandlers({
+        onImport: vi.fn(
+          (): ImportResult => ({
+            ok: false,
+            error: {
+              code: "store-not-empty",
+              message: "Store must be empty before import.",
+            },
+          })
+        ),
+      });
+      const controls = createSessionControls(handlers);
+
+      selectFile(getImportInput(controls.element), fakeFile("[]"));
+
+      const status = getImportStatus(controls.element);
+      await vi.waitFor(() =>
+        expect(status.textContent).toMatch(/clear/i)
+      );
+
+      expect(status.getAttribute("data-devlens-session-import-outcome")).toBe(
+        "error"
+      );
+    });
+
+    it("shows the underlying error message for other structured import failures", async () => {
+      const handlers = makeHandlers({
+        onImport: vi.fn(
+          (): ImportResult => ({
+            ok: false,
+            error: {
+              code: "invalid-json",
+              message: "Import input is not valid JSON.",
+            },
+          })
+        ),
+      });
+      const controls = createSessionControls(handlers);
+
+      selectFile(getImportInput(controls.element), fakeFile("not json"));
+
+      const status = getImportStatus(controls.element);
+      await vi.waitFor(() =>
+        expect(status.textContent).toBe("Import input is not valid JSON.")
+      );
+      expect(status.getAttribute("data-devlens-session-import-outcome")).toBe(
+        "error"
+      );
+    });
+
+    it("shows a read-failure message, without calling onImport(), when File.text() rejects", async () => {
+      const handlers = makeHandlers();
+      const controls = createSessionControls(handlers);
+
+      selectFile(getImportInput(controls.element), unreadableFile());
+
+      const status = getImportStatus(controls.element);
+      await vi.waitFor(() =>
+        expect(status.textContent).toContain("Could not read")
+      );
+
+      expect(handlers.onImport).not.toHaveBeenCalled();
+      expect(status.getAttribute("data-devlens-session-import-outcome")).toBe(
+        "error"
+      );
+    });
+
+    it("resets the input value after handling a selection, so the same file can be re-selected", async () => {
+      const handlers = makeHandlers();
+      const controls = createSessionControls(handlers);
+      const input = getImportInput(controls.element);
+
+      selectFile(input, fakeFile("[]"));
+      await vi.waitFor(() => expect(handlers.onImport).toHaveBeenCalledTimes(1));
+
+      expect(input.value).toBe("");
+    });
+
+    it("clears a previous status message at the start of a new attempt", async () => {
+      const handlers = makeHandlers({
+        onImport: vi.fn(
+          (): ImportResult => ({ ok: true, importedCount: 1 })
+        ),
+      });
+      const controls = createSessionControls(handlers);
+      const input = getImportInput(controls.element);
+      const status = getImportStatus(controls.element);
+
+      selectFile(input, fakeFile("[]"));
+      await vi.waitFor(() => expect(status.textContent).not.toBe(""));
+
+      // Redefine files for a second selection.
+      Object.defineProperty(input, "files", {
+        value: [fakeFile("[]")],
+        configurable: true,
+      });
+      input.dispatchEvent(new Event("change"));
+
+      // Status is cleared synchronously before the (microtask) read
+      // resolves and repopulates it.
+      expect(status.textContent).toBe("");
     });
   });
 });
