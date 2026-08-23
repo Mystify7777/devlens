@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { createEventBus } from "@devlens/core";
+import { createEventBus, createEventStore, connectStoreToBus } from "@devlens/core";
 import { createNetworkPlugin } from "./network";
 
 // Now that install() actually patches window.fetch (Step 3A) and
@@ -583,5 +583,98 @@ describe("createNetworkPlugin end-to-end XHR reporting (Step 4B)", () => {
       });
       expect(event.origin).toBe("xhr");
     });
+  });
+});
+
+// v0.5.2 Network Integration milestone: every prior test in this file
+// asserts against a bare EventBus (bus.getEvents()), matching how
+// Fetch/XHR classification and reporting were originally built and
+// verified in isolation. Nothing above ever exercises the second half
+// of Network's real production path — connectStoreToBus() and a real
+// EventStore — the same path apps/playground/main.ts actually wires
+// together (Runtime and Console already have no dedicated test for
+// this either; Network gets one here specifically because the v0.5.2
+// milestone's own investigation flagged the absence of any
+// Network-to-Store composition coverage). This is intentionally the
+// smallest possible test proving the seam works, not a duplicate of
+// the classification/lifecycle coverage above.
+describe("createNetworkPlugin composed with EventStore (v0.5.2)", () => {
+  it("a captured Fetch request reaches a connected EventStore, tagged with category \"network\"", async () => {
+    window.fetch = vi.fn(async () => new Response(null, { status: 200 })) as unknown as typeof fetch;
+
+    const bus = createEventBus();
+    const store = createEventStore();
+    connectStoreToBus(bus, store);
+    const network = createNetworkPlugin(bus);
+    network.install();
+
+    await window.fetch("https://api.example.com/users");
+
+    const events = store.getAll();
+    expect(events).toHaveLength(1);
+    expect(events[0].category).toBe("network");
+    expect(events[0].origin).toBe("fetch");
+  });
+});
+
+// v0.5.2 Network Integration milestone: reproduces the exact
+// composition apps/playground/main.ts uses —
+// bus.subscribe("*", event => console.table(event)) — with a
+// Network-originated event as the trigger, rather than a
+// Runtime/Console-originated one (which is all any existing test in
+// the repo covers).
+//
+// This deliberately does NOT install @devlens/console. That is not a
+// gap: Console's own METHODS list (packages/console/src/console.ts)
+// intercepts only log/info/debug/warn/error — "table" is confirmed
+// absent from it, and grepping the whole @devlens/console package
+// source for "table" finds no reference at all. console.table is
+// therefore never touched by Console's interceptor regardless of
+// whether Console is installed, so Console's install state cannot
+// affect this composition's behavior one way or the other. Adding
+// @devlens/console as a dependency of @devlens/network purely to
+// install a plugin whose presence provably changes nothing here would
+// be a new, unjustified cross-capture-package edge — something no
+// existing test in this repo does (every test file only ever imports
+// @devlens/core alongside the package under test). This test verifies
+// the composition precisely as it actually needs to be verified,
+// without introducing that edge.
+describe("Playground-style bus.subscribe(\"*\") → console.table() composition (v0.5.2)", () => {
+  it("a Network-originated event reaches a wildcard subscriber and is printed with console.table()", async () => {
+    window.fetch = vi.fn(async () => new Response(null, { status: 200 })) as unknown as typeof fetch;
+
+    const realTable = console.table;
+    const tableSpy = vi.fn();
+    console.table = tableSpy;
+
+    try {
+      const bus = createEventBus();
+      const store = createEventStore();
+      connectStoreToBus(bus, store);
+      const network = createNetworkPlugin(bus);
+      network.install();
+
+      bus.subscribe("*", (event) => {
+        console.table(event);
+      });
+
+      await window.fetch("https://api.example.com/orders");
+
+      // Exactly one Network event was ever reported — the subscriber's
+      // own console.table() call must not have triggered a second,
+      // recursive report (it can't, since Network's interceptor patches
+      // fetch/XHR, not console.table — but this is the same
+      // "exactly once" shape every other reentrancy-adjacent test in
+      // this suite uses, applied to this composition specifically).
+      expect(store.getAll()).toHaveLength(1);
+      expect(tableSpy).toHaveBeenCalledTimes(1);
+      expect(tableSpy.mock.calls[0][0].category).toBe("network");
+    } finally {
+      // Restored unconditionally, even if an assertion above throws —
+      // otherwise a failing assertion would leave the real
+      // console.table permanently replaced for every test that runs
+      // after this one in the same process.
+      console.table = realTable;
+    }
   });
 });

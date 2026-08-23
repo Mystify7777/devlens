@@ -1,0 +1,4 @@
+{
+  "source": "DevLens Playground",
+  "purpose": "Deterministic same-origin fetch/XHR target for the Network capture demo buttons. No external network dependency."
+}

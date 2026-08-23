@@ -20,6 +20,9 @@ importers:
       '@devlens/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@devlens/network':
+        specifier: workspace:*
+        version: link:../../packages/network
       '@devlens/panel':
         specifier: workspace:*
         version: link:../../packages/panel
@@ -49,6 +52,22 @@ importers:
 
   packages/core:
     devDependencies:
+      typescript:
+        specifier: ^5.5.4
+        version: 5.9.3
+      vitest:
+        specifier: ^2.0.5
+        version: 2.1.9(jsdom@24.1.3)
+
+  packages/network:
+    dependencies:
+      '@devlens/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      jsdom:
+        specifier: ^24.1.1
+        version: 24.1.3
       typescript:
         specifier: ^5.5.4
         version: 5.9.3

@@ -11,7 +11,10 @@
 
 
     <span>Present</span>
-    <p>Every button below emits a DevLens event. Events are rendered live in the embedded DevLens Panel.</p>
+    <p>
+      Trigger runtime, console, and network activity and watch the resulting
+      DevLens events appear live in the embedded Panel.
+    </p>
 
     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
       <button id="btn-throw">Throw Error</button>
@@ -19,6 +22,10 @@
       <button id="btn-log">console.log()</button>
       <button id="btn-warn">console.warn()</button>
       <button id="btn-error">console.error()</button>
+      <button id="btn-fetch-success">Fetch (success)</button>
+      <button id="btn-fetch-error">Fetch (404)</button>
+      <button id="btn-xhr-success">XHR (success)</button>
+      <button id="btn-xhr-error">XHR (404)</button>
     </div>
 
     <script type="module" src="/main.ts"></script>

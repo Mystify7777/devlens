@@ -2,7 +2,7 @@
 
 A framework-agnostic, embeddable developer diagnostics panel.
 
-DevLens unifies runtime errors, console activity, and (soon) network
+DevLens unifies runtime errors, console activity, and network
 requests into a single normalized event stream, displayed live in an
 overlay you drop into any running app — no build config and no framework
 dependency required for the core engine.
@@ -36,7 +36,7 @@ dependency required for the core engine.
 - Normalized, versioned event model shared across every capture source
 - Shadow-DOM-isolated overlay — no CSS collisions with the host app
 - Zero runtime dependencies in `@devlens/core`
-- 350 test cases across the suite (`pnpm test` to run them)
+- 607 test cases across the suite (`pnpm test` to run them)
 - Every architectural decision recorded as an ADR before implementation
 
 ---
@@ -49,7 +49,7 @@ Runtime       ✅  complete, tested
 Console       ✅  complete, tested
 Playground    ✅  working
 Panel         ✅  complete, tested
-Network       ⏳  not started
+Network       ✅  complete, tested (Fetch + async XHR)
 React         ⏳  not started
 ```
 
@@ -57,6 +57,7 @@ DevLens already provides a complete end-to-end event pipeline:
 
 - **Runtime** captures browser failures (`window.error`, unhandled rejections)
 - **Console** captures console activity, without ever suppressing native output
+- **Network** captures Fetch and asynchronous XHR requests, classified by outcome
 - **EventBus** distributes normalized events synchronously
 - **EventStore** retains them, decoupled from the Bus
 - **Panel** renders them live, inside a Shadow DOM overlay
@@ -70,15 +71,13 @@ All of it is exercised end-to-end in `apps/playground`.
 ```text
 Runtime  ─┐
 Console  ─┼─▶  EventBus  ─▶  EventStore  ─▶  Panel
-Network* ─┘                                 (renders only,
+Network  ─┘                                 (renders only,
                                               never captures)
 ```
 
-\* not yet implemented
-
-- **Capture** packages (`runtime`, `console`, and eventually `network`)
-  are Plugins that observe browser behavior and `bus.report()` normalized
-  events.
+- **Capture** packages (`runtime`, `console`, `network`, and eventually
+  `react`) are Plugins that observe browser behavior and `bus.report()`
+  normalized events.
 - The **Event Bus** is a synchronous, dependency-free dispatcher — no
   async, no priority, no bubbling.
 - The **Event Store** is a plain data structure, deliberately decoupled
@@ -107,15 +106,15 @@ interface Plugin {
 | [`@devlens/runtime`](./packages/runtime) | Captures `window.error` / `unhandledrejection` | ✅ |
 | [`@devlens/console`](./packages/console) | Intercepts `console.log/info/debug/warn/error` | ✅ |
 | [`@devlens/panel`](./packages/panel) | Shadow-DOM overlay that renders events live | ✅ |
-| `@devlens/network` | Captures network requests/failures | ⏳ planned |
+| [`@devlens/network`](./packages/network) | Captures Fetch and async XHR requests, classified by outcome | ✅ |
 | `@devlens/react` | React wrapper around the Panel | ⏳ planned |
 
 ### `apps/playground`
 
-A minimal Vite app wiring Core + Runtime + Console + Panel together, used
-to manually verify the whole pipeline. It is intentionally not a demo
-app — just enough UI (a handful of buttons) to trigger each capture path
-and watch a row appear in the Panel overlay.
+A minimal Vite app wiring Core + Runtime + Console + Network + Panel
+together, used to manually verify the whole pipeline. It is
+intentionally not a demo app — just enough UI (a handful of buttons) to
+trigger each capture path and watch a row appear in the Panel overlay.
 
 ---
 

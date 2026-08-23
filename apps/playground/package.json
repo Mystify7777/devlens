@@ -10,6 +10,7 @@
     "@devlens/core": "workspace:*",
     "@devlens/runtime": "workspace:*",
     "@devlens/console": "workspace:*",
+    "@devlens/network": "workspace:*",
     "@devlens/panel": "workspace:*"
   },
   "devDependencies": {

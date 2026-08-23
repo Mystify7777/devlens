@@ -1998,3 +1998,30 @@ describe("createPanel session controls, mounted end-to-end", () => {
     });
   });
 });
+// v0.5.2 Network Integration milestone: Panel's rendering pipeline
+// (event-row.ts, inspector.ts, renderer.ts) is confirmed, by this
+// test, to require zero Network-specific code — a DevLensEvent with
+// category "network" renders through the exact same generic path as
+// any Runtime/Console event already does elsewhere in this file. This
+// is deliberately a single, narrow test, not a duplicate of Network's
+// own classification/normalization coverage (which lives in
+// packages/network's own test suite) — it exists only to prove the
+// pipeline boundary, not to re-verify Network's internal behavior.
+describe("createPanel rendering a network-category event (v0.5.2)", () => {
+  it("renders a network-origin event through the generic pipeline, with no category-specific handling", () => {
+    const networkEvent = makeEvent({
+      origin: "fetch",
+      category: "network",
+      severity: "warn",
+      title: "GET /devlens-sample-missing.json",
+      message: "404 Not Found",
+    });
+    const store = createFakeStore([networkEvent]);
+    const panel = createPanel(store);
+    panel.install();
+
+    expect(renderedTitles()).toEqual(["GET /devlens-sample-missing.json"]);
+
+    panel.uninstall();
+  });
+});
