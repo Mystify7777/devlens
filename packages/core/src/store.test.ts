@@ -106,6 +106,106 @@ describe("EventStore.capacity", () => {
   });
 });
 
+// ADR-0012: a direct RingBuffer.size passthrough — current occupancy,
+// distinct from capacity (the configured maximum). See the ADR's
+// behavioral contract table for the full set of conditions this
+// mirrors.
+describe("EventStore.size", () => {
+  it("is 0 for a newly created, empty Store", () => {
+    const store = createEventStore();
+    expect(store.size).toBe(0);
+  });
+
+  it("increments by exactly 1 after add()", () => {
+    const store = createEventStore();
+    const bus = createEventBus();
+    store.add(bus.report(baseInput()));
+    expect(store.size).toBe(1);
+    store.add(bus.report(baseInput()));
+    expect(store.size).toBe(2);
+  });
+
+  it("increments by the batch length, in one step, after addMany()", () => {
+    const store = createEventStore();
+    const bus = createEventBus();
+    store.addMany([
+      bus.report(baseInput({ title: "a" })),
+      bus.report(baseInput({ title: "b" })),
+      bus.report(baseInput({ title: "c" })),
+    ]);
+    expect(store.size).toBe(3);
+  });
+
+  it("is unchanged by addMany([]) — matches addMany()'s true-no-op contract", () => {
+    const store = createEventStore();
+    const bus = createEventBus();
+    store.add(bus.report(baseInput()));
+    store.addMany([]);
+    expect(store.size).toBe(1);
+  });
+
+  it("resets to 0 after clear()", () => {
+    const store = createEventStore();
+    const bus = createEventBus();
+    store.add(bus.report(baseInput()));
+    store.add(bus.report(baseInput()));
+    store.clear();
+    expect(store.size).toBe(0);
+  });
+
+  it("is pinned at capacity once the Store is full, even as further events are added and evicted", () => {
+    const store = createEventStore({ maxEvents: 3 });
+    const bus = createEventBus();
+    store.add(bus.report(baseInput({ title: "one" })));
+    store.add(bus.report(baseInput({ title: "two" })));
+    store.add(bus.report(baseInput({ title: "three" })));
+    expect(store.size).toBe(3);
+    store.add(bus.report(baseInput({ title: "four" }))); // evicts "one"
+    expect(store.size).toBe(3); // not 4
+  });
+
+  it("is pinned at capacity even when a single addMany() batch alone exceeds it", () => {
+    const store = createEventStore({ maxEvents: 3 });
+    const bus = createEventBus();
+    store.addMany([
+      bus.report(baseInput({ title: "a" })),
+      bus.report(baseInput({ title: "b" })),
+      bus.report(baseInput({ title: "c" })),
+      bus.report(baseInput({ title: "d" })),
+      bus.report(baseInput({ title: "e" })),
+    ]);
+    expect(store.size).toBe(3);
+  });
+
+  it("resets to 0 after destroy()", () => {
+    const store = createEventStore();
+    const bus = createEventBus();
+    store.add(bus.report(baseInput()));
+    store.destroy();
+    expect(store.size).toBe(0);
+  });
+
+  it("behaves exactly as a fresh Store when reused after destroy()", () => {
+    const store = createEventStore({ maxEvents: 2 });
+    const bus = createEventBus();
+    store.add(bus.report(baseInput()));
+    store.add(bus.report(baseInput()));
+    store.destroy();
+
+    expect(store.size).toBe(0);
+    store.add(bus.report(baseInput()));
+    expect(store.size).toBe(1);
+  });
+
+  it("always equals getAll().length", () => {
+    const store = createEventStore();
+    const bus = createEventBus();
+    store.add(bus.report(baseInput({ title: "a" })));
+    store.add(bus.report(baseInput({ title: "b" })));
+    expect(store.size).toBe(store.getAll().length);
+  });
+});
+
 describe("EventStore.addMany()", () => {
   it("preserves supplied event order", () => {
     const store = createEventStore();

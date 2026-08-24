@@ -341,7 +341,7 @@ export function validateImportSession(
 
   // Condition 10: Store must be empty — checked before event validation so
   // store-not-empty is never masked by an event-level failure.
-  if (store.getAll().length !== 0) {
+  if (store.size !== 0) {
     return {
       ok: false,
       error: {

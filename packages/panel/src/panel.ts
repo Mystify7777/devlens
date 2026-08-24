@@ -136,7 +136,7 @@ export function createPanel(store: EventStore): PanelController {
       visibleEvents,
       searchQuery,
       navigationContextCount: navigationContext.length,
-      totalStoreCount: store.getAll().length,
+      totalStoreCount: store.size,
     });
 
     // renderEventList() rebuilds row elements from scratch, so any

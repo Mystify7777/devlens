@@ -469,6 +469,9 @@ function makeFakeStore(
     get capacity() {
       return maxCapacity;
     },
+    get size() {
+      return existingEvents.length;
+    },
     clear: vi.fn(),
     getAll() {
       return [...existingEvents];

@@ -82,6 +82,9 @@ function createFakeStore(initialEvents: DevLensEvent[] = []): FakeEventStore {
     get capacity() {
       return 10000;
     },
+    get size() {
+      return events.length;
+    },
     destroy() {
       subscribers.clear();
       events = [];

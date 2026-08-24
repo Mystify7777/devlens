@@ -2,11 +2,13 @@
 
 ## Status
 
-Accepted. This ADR records the architectural decision only —
-`store.ts`, `ring-buffer.ts`, tests, and existing `@devlens/panel`
-consumers are all unmodified by this ADR and remain exactly as they
-are today; implementing the interface member and migrating consumers
-are separate, later steps.
+Accepted. Implemented: `EventStore.size` is a direct `RingBuffer.size`
+passthrough in `store.ts`, covered by a dedicated `EventStore.size`
+test block in `store.test.ts`, and both previously-identified
+`getAll().length` occupancy checks in `@devlens/panel`
+(`panel.ts`'s `totalStoreCount`, `import.ts`'s empty-Store
+precondition) have been migrated to use it. `ring-buffer.ts` is
+unmodified, as this ADR always specified.
 
 ## Context
 

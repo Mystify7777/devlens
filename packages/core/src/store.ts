@@ -29,6 +29,11 @@ export interface EventStore {
   /** The configured maximum number of events this Store retains. Fixed
    * for the Store's lifetime; does not reflect current fill level. */
   readonly capacity: number;
+  /** The number of events currently stored — a direct RingBuffer.size
+   * passthrough, not a lifetime counter. Changes as events are added
+   * or removed; pinned at `capacity` once the Store is full. See
+   * ADR-0012. */
+  readonly size: number;
   clear(): void;
   getAll(): DevLensEvent[];
   getByCategory(category: EventCategory): DevLensEvent[];
@@ -62,6 +67,9 @@ export function createEventStore(options: EventStoreOptions = {}): EventStore {
     },
     get capacity() {
       return maxEvents;
+    },
+    get size() {
+      return buffer.size;
     },
     clear() {
       buffer.clear();
