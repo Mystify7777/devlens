@@ -320,3 +320,36 @@ inspection.md's Pause/Resume/Clear/Export model, decision 5.
 **Non-goal, still deferred:** a floating Panel-wide expand/collapse
 trigger (tracked in inspection.md's Future extensions) is unrelated to
 this region and isn't introduced by it.
+
+## Amendment (via ADR-0013): React resolved as a capture mechanism, not a Panel wrapper
+
+The "Rendering strategy" section above states: "If a React-specific
+experience is wanted later, `@devlens/react` should wrap the Panel,
+not replace it." **That statement about `@devlens/react`'s role is
+corrected by ADR-0013 (React Integration Role).** The original
+sentence is left in place above, unedited, as the historical record of
+what this ADR originally said — it is superseded by the following, not
+retroactively rewritten.
+
+ADR-0013 resolves `@devlens/react` as a **client-side React
+error-boundary capture mechanism** — reporting `errorInfo.componentStack`
+through the same `EventBus` every other capture source uses — not as
+a wrapper around Panel's rendering surface. This decision was made
+against concrete evidence (React's production console-output
+minification defeating `@devlens/console`'s otherwise-thorough
+capture) rather than the general "a React experience might be wanted
+someday" framing this ADR originally used.
+
+This ADR's actual, load-bearing decision — vanilla DOM rendering, no
+framework, Shadow DOM isolation — is entirely unaffected and remains
+exactly as decided above. Nothing about how Panel renders changes
+because of this amendment.
+
+**A reactive Panel-state adapter** (exposing Panel's internal filter/
+selection/pause state to a React application, closer to what this
+ADR's original sentence may have implied) **remains a possible future
+package**, but is explicitly deferred by ADR-0013, not decided here or
+there — it would require Panel API additions (a UI-state subscription
+mechanism) that don't exist today and aren't justified by any current
+consumer. If that need is ever demonstrated, it is a separate decision
+from the one ADR-0013 made.
