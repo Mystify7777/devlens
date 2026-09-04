@@ -10,8 +10,8 @@ dependency required for the core engine.
 > **Engine first. UI second. Everything else is a client.**
 >
 > Runtime and Console capture events. The Event Store retains them. The
-> Panel is just one consumer of that Store — a React wrapper, a CLI, or
-> a VS Code extension could just as easily read from the same Store.
+> Panel is just one consumer of that Store — a CLI or a VS Code
+> extension could just as easily read from the same Store.
 
 <!--
   TODO: replace with a real screenshot of apps/playground once the
@@ -36,7 +36,7 @@ dependency required for the core engine.
 - Normalized, versioned event model shared across every capture source
 - Shadow-DOM-isolated overlay — no CSS collisions with the host app
 - Zero runtime dependencies in `@devlens/core`
-- 607 test cases across the suite (`pnpm test` to run them)
+- 627 test cases across the suite (`pnpm test` to run them)
 - Every architectural decision recorded as an ADR before implementation
 
 ---
@@ -50,7 +50,7 @@ Console       ✅  complete, tested
 Playground    ✅  working
 Panel         ✅  complete, tested
 Network       ✅  complete, tested (Fetch + async XHR)
-React         ⏳  not started
+React         ✅  complete, tested (client-only error-boundary capture)
 ```
 
 DevLens already provides a complete end-to-end event pipeline:
@@ -58,6 +58,9 @@ DevLens already provides a complete end-to-end event pipeline:
 - **Runtime** captures browser failures (`window.error`, unhandled rejections)
 - **Console** captures console activity, without ever suppressing native output
 - **Network** captures Fetch and asynchronous XHR requests, classified by outcome
+- **React** captures component errors via an error boundary, reporting
+  React's `componentStack` alongside the caught error (client-only —
+  see ADR-0013)
 - **EventBus** distributes normalized events synchronously
 - **EventStore** retains them, decoupled from the Bus
 - **Panel** renders them live, inside a Shadow DOM overlay
@@ -71,13 +74,12 @@ All of it is exercised end-to-end in `apps/playground`.
 ```text
 Runtime  ─┐
 Console  ─┼─▶  EventBus  ─▶  EventStore  ─▶  Panel
-Network  ─┘                                 (renders only,
-                                              never captures)
+Network  ─┤                                 (renders only,
+React    ─┘                                  never captures)
 ```
 
-- **Capture** packages (`runtime`, `console`, `network`, and eventually
-  `react`) are Plugins that observe browser behavior and `bus.report()`
-  normalized events.
+- **Capture** packages (`runtime`, `console`, `network`, `react`) observe
+  browser or component behavior and `bus.report()` normalized events.
 - The **Event Bus** is a synchronous, dependency-free dispatcher — no
   async, no priority, no bubbling.
 - The **Event Store** is a plain data structure, deliberately decoupled
@@ -87,7 +89,8 @@ Network  ─┘                                 (renders only,
   itself — that separation is one of the project's core architectural
   decisions.
 
-Every capture mechanism implements the same minimal contract:
+Runtime, Console, and Network implement the same minimal `Plugin`
+contract:
 
 ```ts
 interface Plugin {
@@ -95,6 +98,10 @@ interface Plugin {
   uninstall(): void; // idempotent
 }
 ```
+
+`@devlens/react` deliberately does not — a React error boundary has no
+global to patch, so its own React mount/unmount lifecycle is
+sufficient (see ADR-0013 and its amendment to ADR-0006).
 
 ---
 
@@ -107,7 +114,7 @@ interface Plugin {
 | [`@devlens/console`](./packages/console) | Intercepts `console.log/info/debug/warn/error` | ✅ |
 | [`@devlens/panel`](./packages/panel) | Shadow-DOM overlay that renders events live | ✅ |
 | [`@devlens/network`](./packages/network) | Captures Fetch and async XHR requests, classified by outcome | ✅ |
-| `@devlens/react` | React wrapper around the Panel | ⏳ planned |
+| `@devlens/react` | Client-only React error boundary reporting caught component errors | ✅ |
 
 ### `apps/playground`
 
@@ -129,7 +136,8 @@ pnpm --filter @devlens/playground dev
 ```
 
 Open the printed local URL. Click the buttons to trigger a thrown error,
-an unhandled rejection, and each console method — each should produce a
+an unhandled rejection, each console method, and a same-origin
+Fetch/XHR request (success and 404 variants) — each should produce a
 live row in the DevLens overlay.
 
 ### Other root scripts
@@ -175,14 +183,30 @@ Import is also complete: `importSession()` restores a previously
 exported session into an empty `EventStore`, preserving original
 `id`/`timestamp` and array order exactly (see
 `docs/specs/session-import.md` and `docs/adr/0011-session-import.md`,
-Accepted).
+Accepted), and the Panel's own Session Restore UI (an Import button,
+file picker, and status region alongside Export) is complete as well.
+`EventStore.size` (`docs/adr/0012-eventstore-size.md`) exposes current
+Store occupancy directly, replacing two internal `getAll().length`
+workarounds.
+
+`@devlens/react` is also complete: a client-only React error boundary
+that reports caught component errors — including React's own
+`componentStack` — through the same `EventBus` every other capture
+source uses. It is **not** a Panel wrapper; see
+`docs/adr/0013-react-integration-role.md` for why, and its amendments
+to `docs/adr/0006-plugin-contract.md`, `docs/adr/0008-panel.md`, and
+`docs/adr/0009-v0.3.0-direction.md` for the historical correction to
+this project's earlier, contradictory documentation on React's role.
 
 Not yet committed to — this is a proposed direction, open for
 discussion rather than a locked sequence:
 
-- React wrapper around the Panel (`@devlens/react`)
 - Further Network capture metadata (URL normalization, Content-Type,
   response size — see `docs/research/network-capture.md`, Open Issues)
+- A reactive Panel-state adapter for React (distinct from the
+  error-boundary capture above) — deferred pending evidence of real
+  demand; see `docs/adr/0013-react-integration-role.md`'s Scope
+  boundaries.
 
 ---
 
@@ -195,7 +219,9 @@ devlens/
 │   ├── core/           event bus, store, plugin contract
 │   ├── runtime/        window.error / unhandledrejection capture
 │   ├── console/        console.* interception
-│   └── panel/          Shadow-DOM overlay renderer
+│   ├── network/        fetch/XHR interception, outcome classification
+│   ├── panel/          Shadow-DOM overlay renderer
+│   └── react/          client-only error-boundary capture
 ├── apps/
 │   └── playground/     manual end-to-end verification app
 ├── DESIGN.md
