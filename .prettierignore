@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+out/
+
+# Generated files
+.turbo/
+coverage/
+
+# Package manager
+pnpm-lock.yaml
+package-lock.json
+npm-lock.json
+
+# Environment
+.env
+.env.*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test outputs
+*.lcov
+
+# TypeScript build info
+*.tsbuildinfo
