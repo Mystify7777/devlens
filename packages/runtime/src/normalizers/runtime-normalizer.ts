@@ -38,9 +38,7 @@ export function normalizeErrorEvent(event: {
   };
 }
 
-export function normalizeUnhandledRejection(event: {
-  reason: unknown;
-}): DevLensEventInput {
+export function normalizeUnhandledRejection(event: { reason: unknown }): DevLensEventInput {
   const { message, stack } = describeReason(event.reason);
 
   return {

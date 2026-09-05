@@ -241,9 +241,7 @@ describe("EventStore.addMany()", () => {
   it("follows normal RingBuffer eviction for an oversized batch", () => {
     const store = createEventStore({ maxEvents: 3 });
     const bus = createEventBus();
-    const events = ["a", "b", "c", "d", "e"].map((t) =>
-      bus.report(baseInput({ title: t }))
-    );
+    const events = ["a", "b", "c", "d", "e"].map((t) => bus.report(baseInput({ title: t })));
     store.addMany(events); // 5 events, capacity 3 → oldest 2 evicted
     expect(store.getAll().map((e) => e.title)).toEqual(["c", "d", "e"]);
     expect(store.getAll()).toHaveLength(3);
@@ -254,7 +252,10 @@ describe("EventStore.addMany()", () => {
     const bus = createEventBus();
     const valid = bus.report(baseInput({ title: "real" }));
     // Pass an unrecognised extra field via cast; addMany() must not inspect it
-    const withExtra = { ...valid, unknownField: "sneaky" } as unknown as import("./types").DevLensEvent;
+    const withExtra = {
+      ...valid,
+      unknownField: "sneaky",
+    } as unknown as import("./types").DevLensEvent;
     expect(() => store.addMany([withExtra])).not.toThrow();
     expect(store.getAll()).toHaveLength(1);
   });

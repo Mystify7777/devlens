@@ -47,19 +47,13 @@ describe("createEventRow", () => {
   });
 
   it("renders a message child with the event's message", () => {
-    const row = createEventRow(
-      makeEvent({ message: "something went wrong" }),
-      ""
-    );
+    const row = createEventRow(makeEvent({ message: "something went wrong" }), "");
     const messageEl = row.querySelector("[data-devlens-event-message]");
     expect(messageEl?.textContent).toBe("something went wrong");
   });
 
   it("uses textContent/DOM nodes, never innerHTML, so markup in message is not parsed", () => {
-    const row = createEventRow(
-      makeEvent({ message: "<img src=x onerror=alert(1)>" }),
-      ""
-    );
+    const row = createEventRow(makeEvent({ message: "<img src=x onerror=alert(1)>" }), "");
     const messageEl = row.querySelector("[data-devlens-event-message]");
     expect(messageEl?.textContent).toBe("<img src=x onerror=alert(1)>");
     expect(messageEl?.querySelector("img")).toBeNull();
@@ -80,25 +74,15 @@ describe("createEventRow", () => {
 
   describe("search highlighting", () => {
     it("highlights a matching substring in the title", () => {
-      const row = createEventRow(
-        makeEvent({ title: "Network Timeout" }),
-        "timeout"
-      );
+      const row = createEventRow(makeEvent({ title: "Network Timeout" }), "timeout");
       const titleEl = row.querySelector("[data-devlens-event-title]");
-      expect(titleEl?.querySelector("[data-devlens-match]")?.textContent).toBe(
-        "Timeout"
-      );
+      expect(titleEl?.querySelector("[data-devlens-match]")?.textContent).toBe("Timeout");
     });
 
     it("highlights a matching substring in the message", () => {
-      const row = createEventRow(
-        makeEvent({ message: "connection timed out" }),
-        "timed out"
-      );
+      const row = createEventRow(makeEvent({ message: "connection timed out" }), "timed out");
       const messageEl = row.querySelector("[data-devlens-event-message]");
-      expect(
-        messageEl?.querySelector("[data-devlens-match]")?.textContent
-      ).toBe("timed out");
+      expect(messageEl?.querySelector("[data-devlens-match]")?.textContent).toBe("timed out");
     });
 
     it("does not highlight anything when the query is empty", () => {
@@ -107,10 +91,7 @@ describe("createEventRow", () => {
     });
 
     it("does not alter the visible text of the title when highlighting", () => {
-      const row = createEventRow(
-        makeEvent({ title: "Network Timeout" }),
-        "timeout"
-      );
+      const row = createEventRow(makeEvent({ title: "Network Timeout" }), "timeout");
       const titleEl = row.querySelector("[data-devlens-event-title]");
       expect(titleEl?.textContent).toBe("Network Timeout");
     });

@@ -319,7 +319,10 @@ describe("validateAllEvents", () => {
   });
 
   it("preserves event order in the success result", () => {
-    const events = [validEvent({ id: "a", title: "first" }), validEvent({ id: "b", title: "second" })];
+    const events = [
+      validEvent({ id: "a", title: "first" }),
+      validEvent({ id: "b", title: "second" }),
+    ];
     const result = validateAllEvents(events);
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -451,7 +454,6 @@ describe("validateAllEvents — intra-batch id uniqueness", () => {
   });
 });
 
-
 // ---------------------------------------------------------------------------
 // validateImportSession — Store preconditions + composition
 // ---------------------------------------------------------------------------
@@ -459,10 +461,7 @@ describe("validateAllEvents — intra-batch id uniqueness", () => {
 /** Minimal fake EventStore for composition tests. Only the methods called by
  *  validateImportSession need real implementations; everything else is a
  *  no-op stub, matching the pattern used by panel.test.ts's FakeEventStore. */
-function makeFakeStore(
-  existingEvents: DevLensEvent[] = [],
-  maxCapacity = 10000
-): EventStore {
+function makeFakeStore(existingEvents: DevLensEvent[] = [], maxCapacity = 10000): EventStore {
   return {
     add: vi.fn(),
     addMany: vi.fn(),
@@ -511,11 +510,7 @@ describe("validateImportSession — success cases", () => {
 
   it("succeeds when import count exactly equals Store capacity", () => {
     const store = makeFakeStore([], 3);
-    const events = [
-      validEvent({ id: "x1" }),
-      validEvent({ id: "x2" }),
-      validEvent({ id: "x3" }),
-    ];
+    const events = [validEvent({ id: "x1" }), validEvent({ id: "x2" }), validEvent({ id: "x3" })];
     const result = validateImportSession(validJson(events), store);
     expect(result.ok).toBe(true);
   });
@@ -541,10 +536,7 @@ describe("validateImportSession — store-not-empty precondition", () => {
   it("returns store-not-empty when Store already contains events", () => {
     const existing = { ...validEvent(), id: "pre-existing" } as unknown as DevLensEvent;
     const store = makeFakeStore([existing]);
-    const result = validateImportSession(
-      validJson([validEvent({ id: "new" })]),
-      store
-    );
+    const result = validateImportSession(validJson([validEvent({ id: "new" })]), store);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe("store-not-empty");
   });
@@ -597,7 +589,7 @@ describe("validateImportSession — import-too-large precondition", () => {
     const events = [
       validEvent({ id: "a", version: 2 }), // invalid
       validEvent({ id: "b" }),
-      validEvent({ id: "c" }),             // over capacity
+      validEvent({ id: "c" }), // over capacity
     ];
     const result = validateImportSession(validJson(events), store);
     expect(result.ok).toBe(false);
@@ -721,10 +713,7 @@ describe("importSession — successful import", () => {
   it("calls store.addMany() exactly once for a non-empty import", () => {
     const store = createEventStore();
     const addManySpy = vi.spyOn(store, "addMany");
-    importSession(
-      JSON.stringify([validEvent({ id: "a" }), validEvent({ id: "b" })]),
-      store
-    );
+    importSession(JSON.stringify([validEvent({ id: "a" }), validEvent({ id: "b" })]), store);
     expect(addManySpy).toHaveBeenCalledTimes(1);
   });
 
@@ -743,10 +732,7 @@ describe("importSession — successful import", () => {
 
   it("imported events are retrievable from the Store afterward", () => {
     const store = createEventStore();
-    importSession(
-      JSON.stringify([validEvent({ id: "retrievable", title: "Findable" })]),
-      store
-    );
+    importSession(JSON.stringify([validEvent({ id: "retrievable", title: "Findable" })]), store);
     const found = store.getAll().find((e) => e.id === "retrievable");
     expect(found).toBeDefined();
     expect(found?.title).toBe("Findable");

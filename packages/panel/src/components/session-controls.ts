@@ -94,9 +94,7 @@ function triggerJsonDownload(filename: string, contents: string): void {
   URL.revokeObjectURL(url);
 }
 
-export function createSessionControls(
-  handlers: SessionControlsHandlers
-): SessionControls {
+export function createSessionControls(handlers: SessionControlsHandlers): SessionControls {
   const element = document.createElement("div");
   element.setAttribute("data-devlens-session-controls", "");
 
@@ -107,10 +105,7 @@ export function createSessionControls(
   function syncPauseButtonLabel(): void {
     const paused = handlers.isPaused();
     pauseButton.textContent = paused ? "Resume" : "Pause";
-    pauseButton.setAttribute(
-      "data-devlens-session-state",
-      paused ? "paused" : "running"
-    );
+    pauseButton.setAttribute("data-devlens-session-state", paused ? "paused" : "running");
   }
 
   pauseButton.addEventListener("click", () => {
@@ -215,14 +210,7 @@ export function createSessionControls(
       });
   });
 
-  element.append(
-    pauseButton,
-    clearButton,
-    exportButton,
-    importButton,
-    importInput,
-    importStatus
-  );
+  element.append(pauseButton, clearButton, exportButton, importButton, importInput, importStatus);
 
   return { element };
 }

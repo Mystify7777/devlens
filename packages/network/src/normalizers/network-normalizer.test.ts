@@ -3,9 +3,7 @@ import { createEventBus } from "@devlens/core";
 import { normalizeNetworkEvent } from "./network-normalizer";
 import type { CapturedRequest } from "../types";
 
-function makeCapturedRequest(
-  overrides: Partial<CapturedRequest> = {}
-): CapturedRequest {
+function makeCapturedRequest(overrides: Partial<CapturedRequest> = {}): CapturedRequest {
   return {
     origin: "fetch",
     method: "GET",
@@ -70,9 +68,7 @@ describe("normalizeNetworkEvent", () => {
     // If this function ever redacted, this assertion (and the title
     // assertion above) would be the first thing to fail — redaction is
     // explicitly a capture-layer concern (ADR-0010), not normalization's.
-    expect(result.metadata?.url).toBe(
-      "https://api.example.com/search?token=super-secret-value"
-    );
+    expect(result.metadata?.url).toBe("https://api.example.com/search?token=super-secret-value");
     expect(result.title).toContain("token=super-secret-value");
   });
 

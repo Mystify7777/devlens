@@ -34,11 +34,7 @@ describe("installXhrInterceptor — behavior preservation", () => {
     const xhr = new XMLHttpRequest();
     xhr.open("GET", "https://api.example.com/users", true);
 
-    expect(fakeOpen).toHaveBeenCalledWith(
-      "GET",
-      "https://api.example.com/users",
-      true
-    );
+    expect(fakeOpen).toHaveBeenCalledWith("GET", "https://api.example.com/users", true);
   });
 
   it("forwards send()'s arguments to the original exactly", () => {
@@ -147,9 +143,7 @@ describe("installXhrInterceptor — completion reporting", () => {
     xhr.dispatchEvent(new Event("load"));
     xhr.dispatchEvent(new Event("loadend"));
 
-    expect(onSettle).toHaveBeenCalledWith(
-      expect.objectContaining({ event: "load", status: 200 })
-    );
+    expect(onSettle).toHaveBeenCalledWith(expect.objectContaining({ event: "load", status: 200 }));
   });
 
   it("reports event: 'error' when error fired", () => {
@@ -162,9 +156,7 @@ describe("installXhrInterceptor — completion reporting", () => {
     xhr.dispatchEvent(new Event("error"));
     xhr.dispatchEvent(new Event("loadend"));
 
-    expect(onSettle).toHaveBeenCalledWith(
-      expect.objectContaining({ event: "error" })
-    );
+    expect(onSettle).toHaveBeenCalledWith(expect.objectContaining({ event: "error" }));
   });
 
   it("reports event: 'abort' when abort fired", () => {
@@ -177,9 +169,7 @@ describe("installXhrInterceptor — completion reporting", () => {
     xhr.dispatchEvent(new Event("abort"));
     xhr.dispatchEvent(new Event("loadend"));
 
-    expect(onSettle).toHaveBeenCalledWith(
-      expect.objectContaining({ event: "abort" })
-    );
+    expect(onSettle).toHaveBeenCalledWith(expect.objectContaining({ event: "abort" }));
   });
 
   it("reports event: 'timeout' when timeout fired", () => {
@@ -192,9 +182,7 @@ describe("installXhrInterceptor — completion reporting", () => {
     xhr.dispatchEvent(new Event("timeout"));
     xhr.dispatchEvent(new Event("loadend"));
 
-    expect(onSettle).toHaveBeenCalledWith(
-      expect.objectContaining({ event: "timeout" })
-    );
+    expect(onSettle).toHaveBeenCalledWith(expect.objectContaining({ event: "timeout" }));
   });
 
   it("computes duration from performance.now(), measured from send()", () => {
@@ -209,9 +197,7 @@ describe("installXhrInterceptor — completion reporting", () => {
     xhr.dispatchEvent(new Event("load"));
     xhr.dispatchEvent(new Event("loadend"));
 
-    expect(onSettle).toHaveBeenCalledWith(
-      expect.objectContaining({ duration: 88 })
-    );
+    expect(onSettle).toHaveBeenCalledWith(expect.objectContaining({ duration: 88 }));
   });
 
   it("carries the method/url captured at open() time", () => {

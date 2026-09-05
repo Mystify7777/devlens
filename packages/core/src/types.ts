@@ -7,13 +7,7 @@ export type EventSeverity = "trace" | "debug" | "info" | "warn" | "error" | "fat
 
 /** Categories with first-class support (autocomplete, known icons/colors). */
 export type BuiltinEventCategory =
-  | "runtime"
-  | "console"
-  | "network"
-  | "compiler"
-  | "framework"
-  | "performance";
-
+  "runtime" | "console" | "network" | "compiler" | "framework" | "performance";
 
 /**
  * Hybrid literal-union type: builtin categories get autocomplete, but
@@ -22,7 +16,6 @@ export type BuiltinEventCategory =
  */
 export type EventCategory = BuiltinEventCategory | (string & {});
 
-
 /**
  * Represents one normalized event emitted anywhere within a
  * DevLens-enabled application. Fields are readonly — once an event has
@@ -30,18 +23,24 @@ export type EventCategory = BuiltinEventCategory | (string & {});
  * as immutable by every consumer (subscribers, Store, Panel).
  */
 export interface DevLensEvent {
-  readonly id: string;  /** Unique event ID. Assigned by the Event Bus if not provided. */
-  readonly version: 1;  /** Schema version of this event shape. Assigned by the Event Bus if not provided. */
-  readonly origin: string;  /** Where this event came from, e.g. "window.onerror", "vite", "plugin:apollo". */
+  readonly id: string; /** Unique event ID. Assigned by the Event Bus if not provided. */
+  readonly version: 1; /** Schema version of this event shape. Assigned by the Event Bus if not provided. */
+  readonly origin: string; /** Where this event came from, e.g. "window.onerror", "vite", "plugin:apollo". */
   readonly category: EventCategory;
   readonly severity: EventSeverity;
   readonly title: string;
   readonly message: string;
-  readonly timestamp: number;  /** Assigned by the Event Bus if not provided. */
+  readonly timestamp: number; /** Assigned by the Event Bus if not provided. */
   readonly stack?: string;
-  readonly metadata?: Record<string, unknown>;  /** Data describing the event itself, e.g. { duration, status }. */
-  readonly context?: Record<string, unknown>;  /** Data describing the environment the event occurred in, e.g. { route, viewport }. */
-  readonly tags?: string[];  /** Free-form labels for search/filtering, e.g. ["react", "auth", "critical"]. */
+  readonly metadata?: Record<
+    string,
+    unknown
+  >; /** Data describing the event itself, e.g. { duration, status }. */
+  readonly context?: Record<
+    string,
+    unknown
+  >; /** Data describing the environment the event occurred in, e.g. { route, viewport }. */
+  readonly tags?: string[]; /** Free-form labels for search/filtering, e.g. ["react", "auth", "critical"]. */
 }
 
 /**
@@ -66,15 +65,3 @@ export type DevLensEventInput = Omit<DevLensEvent, "id" | "timestamp" | "version
   timestamp?: number;
   version?: 1;
 };
-
-
-
-
-
-
-
-
-
-
-
-

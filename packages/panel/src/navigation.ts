@@ -53,9 +53,7 @@ export function computeNavigationTarget(
   }
 
   const currentIndex =
-    currentEventId === null
-      ? -1
-      : visibleEvents.findIndex((event) => event.id === currentEventId);
+    currentEventId === null ? -1 : visibleEvents.findIndex((event) => event.id === currentEventId);
 
   if (currentIndex === -1) {
     // No selection, or the selected event isn't in the currently
@@ -74,7 +72,5 @@ export function computeNavigationTarget(
 
   // direction === "previous"
   const previousIndex = currentIndex - 1;
-  return previousIndex >= 0
-    ? visibleEvents[previousIndex]
-    : visibleEvents[currentIndex];
+  return previousIndex >= 0 ? visibleEvents[previousIndex] : visibleEvents[currentIndex];
 }

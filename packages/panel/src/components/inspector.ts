@@ -62,21 +62,14 @@ export function createInspector(): Inspector {
     element.appendChild(field);
   }
 
-  function appendHighlightedField(
-    name: string,
-    value: string,
-    searchQuery: string
-  ) {
+  function appendHighlightedField(name: string, value: string, searchQuery: string) {
     const field = document.createElement("div");
     field.setAttribute(`data-devlens-inspector-${name}`, "");
     field.appendChild(highlightText(value, searchQuery));
     element.appendChild(field);
   }
 
-  function appendKeyValueSection(
-    name: string,
-    record: Record<string, unknown> | undefined
-  ) {
+  function appendKeyValueSection(name: string, record: Record<string, unknown> | undefined) {
     if (!record) return;
 
     const entries = Object.entries(record);

@@ -94,7 +94,7 @@ contract:
 
 ```ts
 interface Plugin {
-  install(): void;   // idempotent
+  install(): void; // idempotent
   uninstall(): void; // idempotent
 }
 ```
@@ -107,14 +107,14 @@ sufficient (see ADR-0013 and its amendment to ADR-0006).
 
 ## Packages
 
-| Package | Description | Status |
-|---|---|---|
-| [`@devlens/core`](./packages/core) | Event model, Event Bus, Event Store, Plugin contract | ✅ |
-| [`@devlens/runtime`](./packages/runtime) | Captures `window.error` / `unhandledrejection` | ✅ |
-| [`@devlens/console`](./packages/console) | Intercepts `console.log/info/debug/warn/error` | ✅ |
-| [`@devlens/panel`](./packages/panel) | Shadow-DOM overlay that renders events live | ✅ |
-| [`@devlens/network`](./packages/network) | Captures Fetch and async XHR requests, classified by outcome | ✅ |
-| `@devlens/react` | Client-only React error boundary reporting caught component errors | ✅ |
+| Package                                  | Description                                                        | Status |
+| ---------------------------------------- | ------------------------------------------------------------------ | ------ |
+| [`@devlens/core`](./packages/core)       | Event model, Event Bus, Event Store, Plugin contract               | ✅     |
+| [`@devlens/runtime`](./packages/runtime) | Captures `window.error` / `unhandledrejection`                     | ✅     |
+| [`@devlens/console`](./packages/console) | Intercepts `console.log/info/debug/warn/error`                     | ✅     |
+| [`@devlens/panel`](./packages/panel)     | Shadow-DOM overlay that renders events live                        | ✅     |
+| [`@devlens/network`](./packages/network) | Captures Fetch and async XHR requests, classified by outcome       | ✅     |
+| `@devlens/react`                         | Client-only React error boundary reporting caught component errors | ✅     |
 
 ### `apps/playground`
 

@@ -1,12 +1,6 @@
 import type { EventBus, Plugin } from "@devlens/core";
-import {
-  createFetchInterceptor,
-  type FetchSettleInfo,
-} from "./interceptors/fetch-interceptor";
-import {
-  installXhrInterceptor,
-  type XhrSettleInfo,
-} from "./interceptors/xhr-interceptor";
+import { createFetchInterceptor, type FetchSettleInfo } from "./interceptors/fetch-interceptor";
+import { installXhrInterceptor, type XhrSettleInfo } from "./interceptors/xhr-interceptor";
 import { classifyFetchOutcome } from "./classifiers/fetch-outcome";
 import { classifyXhrOutcome } from "./classifiers/xhr-outcome";
 import { normalizeNetworkEvent } from "./normalizers/network-normalizer";

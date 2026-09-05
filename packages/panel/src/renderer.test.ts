@@ -55,18 +55,14 @@ describe("createRenderer", () => {
   it("mounts an event-list region and an inspector region on creation", () => {
     createRenderer(container);
 
-    expect(
-      container.querySelector("[data-devlens-event-list]")
-    ).not.toBeNull();
+    expect(container.querySelector("[data-devlens-event-list]")).not.toBeNull();
     expect(container.querySelector("[data-devlens-inspector]")).not.toBeNull();
   });
 
   it("renders the inspector's empty state immediately on creation", () => {
     createRenderer(container);
 
-    expect(
-      container.querySelector("[data-devlens-inspector-empty]")
-    ).not.toBeNull();
+    expect(container.querySelector("[data-devlens-inspector-empty]")).not.toBeNull();
   });
 
   describe("renderEventList", () => {
@@ -76,9 +72,7 @@ describe("createRenderer", () => {
 
       renderer.renderEventList(listInfo(events));
 
-      expect(
-        container.querySelectorAll("[data-devlens-event-row]")
-      ).toHaveLength(3);
+      expect(container.querySelectorAll("[data-devlens-event-row]")).toHaveLength(3);
     });
 
     it("clears previous event rows before rendering", () => {
@@ -89,9 +83,7 @@ describe("createRenderer", () => {
 
       const rows = container.querySelectorAll("[data-devlens-event-row]");
       expect(rows).toHaveLength(1);
-      expect(
-        container.querySelector("[data-devlens-event-title]")?.textContent
-      ).toBe("Second");
+      expect(container.querySelector("[data-devlens-event-title]")?.textContent).toBe("Second");
     });
 
     it("renders events in input order", () => {
@@ -104,9 +96,9 @@ describe("createRenderer", () => {
 
       renderer.renderEventList(listInfo(events));
 
-      const titles = Array.from(
-        container.querySelectorAll("[data-devlens-event-title]")
-      ).map((el) => el.textContent);
+      const titles = Array.from(container.querySelectorAll("[data-devlens-event-title]")).map(
+        (el) => el.textContent
+      );
 
       expect(titles).toEqual(["Alpha", "Beta", "Gamma"]);
     });
@@ -118,9 +110,7 @@ describe("createRenderer", () => {
       renderer.renderEventList(listInfo(events));
       renderer.renderEventList(listInfo(events));
 
-      expect(
-        container.querySelectorAll("[data-devlens-event-row]")
-      ).toHaveLength(2);
+      expect(container.querySelectorAll("[data-devlens-event-row]")).toHaveLength(2);
     });
 
     it("preserves the inspector region when the event list re-renders", () => {
@@ -135,55 +125,37 @@ describe("createRenderer", () => {
       renderer.renderEventList(listInfo([makeEvent()]));
       renderer.renderEventList(listInfo([makeEvent(), makeEvent()]));
 
-      expect(container.querySelector("[data-devlens-inspector]")).toBe(
-        inspectorNode
-      );
+      expect(container.querySelector("[data-devlens-inspector]")).toBe(inspectorNode);
     });
 
     it("highlights matches in rows using the given searchQuery", () => {
       const renderer = createRenderer(container);
       const event = makeEvent({ title: "Network Timeout" });
 
-      renderer.renderEventList(
-        listInfo([event], { searchQuery: "timeout" })
-      );
+      renderer.renderEventList(listInfo([event], { searchQuery: "timeout" }));
 
-      expect(
-        container.querySelector("[data-devlens-match]")?.textContent
-      ).toBe("Timeout");
+      expect(container.querySelector("[data-devlens-match]")?.textContent).toBe("Timeout");
     });
 
     describe("empty and count states", () => {
       it("shows the Store-empty message when totalStoreCount is 0", () => {
         const renderer = createRenderer(container);
 
-        renderer.renderEventList(
-          listInfo([], { totalStoreCount: 0, navigationContextCount: 0 })
-        );
+        renderer.renderEventList(listInfo([], { totalStoreCount: 0, navigationContextCount: 0 }));
 
-        expect(
-          container.querySelector('[data-devlens-event-list-empty="store"]')
-        ).not.toBeNull();
-        expect(
-          container.querySelectorAll("[data-devlens-event-row]")
-        ).toHaveLength(0);
+        expect(container.querySelector('[data-devlens-event-list-empty="store"]')).not.toBeNull();
+        expect(container.querySelectorAll("[data-devlens-event-row]")).toHaveLength(0);
       });
 
       it("shows the filtered-empty message when the Store has events but the Navigation Context is empty", () => {
         const renderer = createRenderer(container);
 
-        renderer.renderEventList(
-          listInfo([], { totalStoreCount: 5, navigationContextCount: 0 })
-        );
+        renderer.renderEventList(listInfo([], { totalStoreCount: 5, navigationContextCount: 0 }));
 
         expect(
-          container.querySelector(
-            '[data-devlens-event-list-empty="filtered"]'
-          )
+          container.querySelector('[data-devlens-event-list-empty="filtered"]')
         ).not.toBeNull();
-        expect(
-          container.querySelectorAll("[data-devlens-event-row]")
-        ).toHaveLength(0);
+        expect(container.querySelectorAll("[data-devlens-event-row]")).toHaveLength(0);
       });
 
       it("shows neither empty state nor a count when Navigation Context equals the Store", () => {
@@ -197,12 +169,8 @@ describe("createRenderer", () => {
           })
         );
 
-        expect(
-          container.querySelector("[data-devlens-event-list-empty]")
-        ).toBeNull();
-        expect(
-          container.querySelector("[data-devlens-event-list-count]")
-        ).toBeNull();
+        expect(container.querySelector("[data-devlens-event-list-empty]")).toBeNull();
+        expect(container.querySelector("[data-devlens-event-list-count]")).toBeNull();
       });
 
       it("shows a count only when Navigation Context diverges from the Store", () => {
@@ -213,10 +181,9 @@ describe("createRenderer", () => {
           listInfo(events, { navigationContextCount: 2, totalStoreCount: 340 })
         );
 
-        expect(
-          container.querySelector("[data-devlens-event-list-count]")
-            ?.textContent
-        ).toBe("2 of 340");
+        expect(container.querySelector("[data-devlens-event-list-count]")?.textContent).toBe(
+          "2 of 340"
+        );
       });
 
       it("does not show a count when the query/filter is set but changes nothing (Navigation Context still equals the Store)", () => {
@@ -234,25 +201,17 @@ describe("createRenderer", () => {
           })
         );
 
-        expect(
-          container.querySelector("[data-devlens-event-list-count]")
-        ).toBeNull();
+        expect(container.querySelector("[data-devlens-event-list-count]")).toBeNull();
       });
 
       it("clears an empty state on a subsequent render with matching events", () => {
         const renderer = createRenderer(container);
 
-        renderer.renderEventList(
-          listInfo([], { totalStoreCount: 5, navigationContextCount: 0 })
-        );
+        renderer.renderEventList(listInfo([], { totalStoreCount: 5, navigationContextCount: 0 }));
         renderer.renderEventList(listInfo([makeEvent()]));
 
-        expect(
-          container.querySelector("[data-devlens-event-list-empty]")
-        ).toBeNull();
-        expect(
-          container.querySelectorAll("[data-devlens-event-row]")
-        ).toHaveLength(1);
+        expect(container.querySelector("[data-devlens-event-list-empty]")).toBeNull();
+        expect(container.querySelectorAll("[data-devlens-event-row]")).toHaveLength(1);
       });
     });
   });
@@ -263,9 +222,9 @@ describe("createRenderer", () => {
 
       renderer.renderInspector(makeEvent({ title: "Selected Event" }), "");
 
-      expect(
-        container.querySelector("[data-devlens-inspector-title]")?.textContent
-      ).toBe("Selected Event");
+      expect(container.querySelector("[data-devlens-inspector-title]")?.textContent).toBe(
+        "Selected Event"
+      );
     });
 
     it("returns the inspector to its empty state when passed null", () => {
@@ -274,36 +233,25 @@ describe("createRenderer", () => {
       renderer.renderInspector(makeEvent(), "");
       renderer.renderInspector(null, "");
 
-      expect(
-        container.querySelector("[data-devlens-inspector-empty]")
-      ).not.toBeNull();
+      expect(container.querySelector("[data-devlens-inspector-empty]")).not.toBeNull();
     });
 
     it("does not affect the event list", () => {
       const renderer = createRenderer(container);
 
       renderer.renderEventList(listInfo([makeEvent({ title: "Row Event" })]));
-      renderer.renderInspector(
-        makeEvent({ title: "Different Selected Event" }),
-        ""
-      );
+      renderer.renderInspector(makeEvent({ title: "Different Selected Event" }), "");
 
-      expect(
-        container.querySelector("[data-devlens-event-title]")?.textContent
-      ).toBe("Row Event");
+      expect(container.querySelector("[data-devlens-event-title]")?.textContent).toBe("Row Event");
     });
 
     it("highlights matches in the inspector using the given searchQuery", () => {
       const renderer = createRenderer(container);
 
-      renderer.renderInspector(
-        makeEvent({ title: "Network Timeout" }),
-        "timeout"
-      );
+      renderer.renderInspector(makeEvent({ title: "Network Timeout" }), "timeout");
 
       expect(
-        container.querySelector("[data-devlens-inspector-title] [data-devlens-match]")
-          ?.textContent
+        container.querySelector("[data-devlens-inspector-title] [data-devlens-match]")?.textContent
       ).toBe("Timeout");
     });
   });
@@ -311,11 +259,9 @@ describe("createRenderer", () => {
   it("makes the event list container focusable, for keyboard navigation to scope to", () => {
     createRenderer(container);
 
-    expect(
-      container
-        .querySelector("[data-devlens-event-list]")
-        ?.getAttribute("tabindex")
-    ).toBe("0");
+    expect(container.querySelector("[data-devlens-event-list]")?.getAttribute("tabindex")).toBe(
+      "0"
+    );
   });
 
   describe("setSelectedRow", () => {
@@ -353,9 +299,7 @@ describe("createRenderer", () => {
       renderer.setSelectedRow(null);
 
       expect(
-        container.querySelector("[data-devlens-event-row]")?.hasAttribute(
-          "data-selected"
-        )
+        container.querySelector("[data-devlens-event-row]")?.hasAttribute("data-selected")
       ).toBe(false);
     });
 
@@ -380,9 +324,7 @@ describe("createRenderer", () => {
       renderer.renderEventList(listInfo([event]));
 
       expect(
-        container.querySelector("[data-devlens-event-row]")?.hasAttribute(
-          "data-selected"
-        )
+        container.querySelector("[data-devlens-event-row]")?.hasAttribute("data-selected")
       ).toBe(false);
     });
 

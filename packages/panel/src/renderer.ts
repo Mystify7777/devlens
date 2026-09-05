@@ -104,12 +104,7 @@ export function createRenderer(shadowRoot: ShadowRoot): Renderer {
   }
 
   return {
-    renderEventList({
-      visibleEvents,
-      searchQuery,
-      navigationContextCount,
-      totalStoreCount,
-    }) {
+    renderEventList({ visibleEvents, searchQuery, navigationContextCount, totalStoreCount }) {
       eventListContainer.replaceChildren();
 
       if (totalStoreCount === 0) {
@@ -165,9 +160,7 @@ export function createRenderer(shadowRoot: ShadowRoot): Renderer {
       // available in every environment, e.g. jsdom), and event IDs
       // shouldn't need to be valid CSS identifiers in the first place.
       // A direct attribute comparison sidesteps both problems.
-      const rows = eventListContainer.querySelectorAll<HTMLElement>(
-        "[data-devlens-event-id]"
-      );
+      const rows = eventListContainer.querySelectorAll<HTMLElement>("[data-devlens-event-id]");
       const row = Array.from(rows).find(
         (candidate) => candidate.getAttribute("data-devlens-event-id") === eventId
       );

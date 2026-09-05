@@ -104,10 +104,10 @@ describe("applyFilters", () => {
     const wrongSeverity = makeEvent({ category: "network", severity: "info" });
     const wrongBoth = makeEvent({ category: "console", severity: "info" });
 
-    const result = applyFilters(
-      [matches, wrongCategory, wrongSeverity, wrongBoth],
-      { categories: ["network"], severities: ["error"] }
-    );
+    const result = applyFilters([matches, wrongCategory, wrongSeverity, wrongBoth], {
+      categories: ["network"],
+      severities: ["error"],
+    });
 
     expect(result).toEqual([matches]);
   });

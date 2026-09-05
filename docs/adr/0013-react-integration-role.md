@@ -22,7 +22,7 @@ rather than merely unspecified:
 - **ADR-0008** (Panel) states "if a React-specific experience is
   wanted later, `@devlens/react` should wrap the Panel, not replace
   it" — a **Panel-wrapper** framing.
-- **ADR-0009** contains both framings *in the same document*: its
+- **ADR-0009** contains both framings _in the same document_: its
   Capture-axis table places React alongside Runtime/Console/Network,
   while its own "Explicitly deferred" section separately calls it a
   "React wrapper... depends on Panel's public surface." This is an
@@ -113,7 +113,7 @@ current filters or current selection):
   right React lifecycle moments): works today with zero Panel changes,
   but is thin enough that a developer could write it inline in a few
   lines without needing a published package — marginal value, not
-  rejected as *wrong*, but not chosen as *this* package's role.
+  rejected as _wrong_, but not chosen as _this_ package's role.
 - **Reactive state adapter** (expose Panel's filters/selection/pause
   state as React state/hooks): would provide real value, but requires
   Panel API additions — a subscription mechanism for UI state — that

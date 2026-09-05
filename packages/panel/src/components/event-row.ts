@@ -29,10 +29,7 @@ import { highlightText } from "../highlight";
  * means. An empty query renders plain text, identical to before
  * highlighting existed.
  */
-export function createEventRow(
-  event: DevLensEvent,
-  searchQuery: string
-): HTMLElement {
+export function createEventRow(event: DevLensEvent, searchQuery: string): HTMLElement {
   const row = document.createElement("div");
   row.setAttribute("data-devlens-event-row", "");
   row.setAttribute("data-devlens-event-id", event.id);

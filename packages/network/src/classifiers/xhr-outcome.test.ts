@@ -44,15 +44,12 @@ describe("classifyXhrOutcome", () => {
       });
     });
 
-    it.each([500, 502, 503, 599])(
-      "status %i -> http-error/error",
-      (status) => {
-        expect(classifyXhrOutcome({ event: "load", status })).toEqual({
-          outcome: "http-error",
-          severity: "error",
-        });
-      }
-    );
+    it.each([500, 502, 503, 599])("status %i -> http-error/error", (status) => {
+      expect(classifyXhrOutcome({ event: "load", status })).toEqual({
+        outcome: "http-error",
+        severity: "error",
+      });
+    });
 
     it("an unexpected status on a load event falls back to success, never guessed as an error", () => {
       expect(classifyXhrOutcome({ event: "load", status: 300 })).toEqual({
@@ -64,8 +61,6 @@ describe("classifyXhrOutcome", () => {
 
   it("is pure — the same input produces the same output, called repeatedly", () => {
     const settlement = { event: "load" as const, status: 404 };
-    expect(classifyXhrOutcome(settlement)).toEqual(
-      classifyXhrOutcome(settlement)
-    );
+    expect(classifyXhrOutcome(settlement)).toEqual(classifyXhrOutcome(settlement));
   });
 });

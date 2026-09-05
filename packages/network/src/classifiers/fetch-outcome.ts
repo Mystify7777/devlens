@@ -18,8 +18,7 @@ export interface OutcomeClassification {
  * just a comment asking nicely.
  */
 export type FetchSettlement =
-  | { state: "fulfilled"; response: Response }
-  | { state: "rejected"; error: unknown };
+  { state: "fulfilled"; response: Response } | { state: "rejected"; error: unknown };
 
 /**
  * Pure: FetchSettlement -> { outcome, severity }. No duration, no
@@ -38,9 +37,7 @@ export type FetchSettlement =
  * distinguish two causes, report the broader observable category
  * rather than guess.
  */
-export function classifyFetchOutcome(
-  settlement: FetchSettlement
-): OutcomeClassification {
+export function classifyFetchOutcome(settlement: FetchSettlement): OutcomeClassification {
   if (settlement.state === "rejected") {
     // Duck-typed, not `instanceof Error` — verified this matters, not
     // just theoretical caution: jsdom's own `DOMException` does not
@@ -83,10 +80,7 @@ export function classifyFetchOutcome(
   // would be exactly the "museum of theoretical possibilities" this
   // contract was written to avoid.
 
-  if (
-    response.status === 0 &&
-    (response.type === "opaque" || response.type === "opaqueredirect")
-  ) {
+  if (response.status === 0 && (response.type === "opaque" || response.type === "opaqueredirect")) {
     return { outcome: "opaque", severity: "info" };
   }
 

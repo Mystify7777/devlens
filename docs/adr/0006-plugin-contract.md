@@ -46,7 +46,7 @@ all three needed the identical factory shape. **That claim about
 React specifically is corrected by ADR-0013 (React Integration Role).**
 
 Console and Network both need an explicit `install()`/`uninstall()`
-pair because both patch or attach a listener to a *global* — the
+pair because both patch or attach a listener to a _global_ — the
 `console.*` methods, `window.fetch`, `XMLHttpRequest.prototype` — that
 must be restored on teardown. Runtime is the same: `window`
 event listeners, added and removed explicitly. React's proposed
@@ -62,7 +62,7 @@ patching consumers) never applied to React in the first place.
 
 **React remains on the Capture axis** (ADR-0009) — it still observes
 something and reports through the same `EventBus` every other capture
-source uses. What changes is only the *shape* of its public export:
+source uses. What changes is only the _shape_ of its public export:
 directionally, something like `createDevLensErrorBoundary(bus):
 React.ComponentType`, not `create*Plugin(bus): Plugin`. This is a
 correction to this ADR's Consequences section, not a reopening of the

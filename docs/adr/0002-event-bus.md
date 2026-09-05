@@ -50,7 +50,7 @@ bus.destroy()
   upcoming Event Store is the source of truth for "what happened, ever";
   the bus only guarantees late subscribers don't miss recent events.
 - Considered removing `getEvents()` in favor of replay-only access. Rejected:
-  the Event Store needs to bootstrap its own state from *something* when it
+  the Event Store needs to bootstrap its own state from _something_ when it
   first subscribes, and `getEvents()` is that hook.
 - Considered named middleware phases (`validation`, `enrichment`, `transform`)
   instead of plain registration-order middleware. Deferred past v0.1 — no
@@ -85,7 +85,7 @@ bus.destroy()
 - `EventMiddleware`'s `next()` now accepts zero arguments (continue with
   the current, possibly mutated-in-place draft) in addition to a
   replacement event (spread style). Both styles remain supported —
-  considered making mutate-in-place the *only* style, rejected: no
+  considered making mutate-in-place the _only_ style, rejected: no
   concrete problem forces removing the spread style, and doing so would
   reverse an already-settled decision without new evidence.
 - `RingBuffer` gained `forEach()`; replay no longer allocates an

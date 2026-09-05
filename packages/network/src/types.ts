@@ -10,12 +10,7 @@ import type { EventSeverity } from "@devlens/core";
  * this is the only file that has to.
  */
 export type NetworkOutcome =
-  | "success"
-  | "http-error"
-  | "network-error"
-  | "aborted"
-  | "timeout"
-  | "opaque";
+  "success" | "http-error" | "network-error" | "aborted" | "timeout" | "opaque";
 
 /**
  * The seam between the two capture mechanisms (Step 3: fetch, Step 4:

@@ -1,11 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { createToolbar } from "./toolbar";
 
-function checkbox(
-  root: HTMLElement,
-  group: string,
-  value: string
-): HTMLInputElement {
+function checkbox(root: HTMLElement, group: string, value: string): HTMLInputElement {
   const el = root.querySelector<HTMLInputElement>(
     `[data-devlens-toolbar-${group}-checkbox][data-value="${value}"]`
   );
@@ -27,29 +23,21 @@ describe("createToolbar", () => {
   it("renders a severity checkbox group and a category checkbox group", () => {
     const toolbar = createToolbar(() => {});
 
-    expect(
-      toolbar.element.querySelector("[data-devlens-toolbar-severity]")
-    ).not.toBeNull();
-    expect(
-      toolbar.element.querySelector("[data-devlens-toolbar-category]")
-    ).not.toBeNull();
+    expect(toolbar.element.querySelector("[data-devlens-toolbar-severity]")).not.toBeNull();
+    expect(toolbar.element.querySelector("[data-devlens-toolbar-category]")).not.toBeNull();
   });
 
   it("renders one checkbox per severity value", () => {
     const toolbar = createToolbar(() => {});
 
-    const checkboxes = toolbar.element.querySelectorAll(
-      "[data-devlens-toolbar-severity-checkbox]"
-    );
+    const checkboxes = toolbar.element.querySelectorAll("[data-devlens-toolbar-severity-checkbox]");
     expect(checkboxes).toHaveLength(6);
   });
 
   it("renders one checkbox per builtin category value", () => {
     const toolbar = createToolbar(() => {});
 
-    const checkboxes = toolbar.element.querySelectorAll(
-      "[data-devlens-toolbar-category-checkbox]"
-    );
+    const checkboxes = toolbar.element.querySelectorAll("[data-devlens-toolbar-category-checkbox]");
     expect(checkboxes).toHaveLength(6);
   });
 
@@ -125,5 +113,4 @@ describe("createToolbar", () => {
       severities: [],
     });
   });
-
 });

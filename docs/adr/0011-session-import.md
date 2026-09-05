@@ -109,7 +109,7 @@ path and no `store.add()`/`store.addMany()` call occurs until every
 event in the batch has been validated and frozen.
 
 This was chosen over per-event rejection specifically because Import
-restores a *historical* session, and a partially restored one is
+restores a _historical_ session, and a partially restored one is
 actively misleading rather than merely incomplete — nothing downstream
 (Store, Panel, Renderer) has any concept of "this session was
 partially restored," so a silently-partial import would present as a
@@ -278,7 +278,7 @@ contradicts it.
 During spec-level work on `docs/specs/session-import.md`, a second
 dependent Core need was found: Decision 8's empty-Store precondition
 prevents `RingBuffer` eviction from silently discarding imported
-events *when the Store is empty*, but says nothing about an import
+events _when the Store is empty_, but says nothing about an import
 whose event count exceeds the Store's capacity even when starting from
 empty. A 12,000-event import into a 10,000-capacity Store would pass
 every check this ADR originally specified, then have its oldest 2,000
@@ -308,10 +308,10 @@ interface EventStore {
 no validation or side-effect role — consistent with the Store's
 existing "pure storage primitive" boundary, the same standard Decision
 9 already applied to `addMany()`. Import uses it to reject an
-oversized import *before* calling `addMany()`; `addMany()` itself
+oversized import _before_ calling `addMany()`; `addMany()` itself
 remains unmodified and continues to apply normal `RingBuffer` eviction
 if ever called with a batch exceeding capacity — the capacity
-*constraint* belongs to Import, not to Core, exactly as validation and
+_constraint_ belongs to Import, not to Core, exactly as validation and
 freezing already do per Decision 3.
 
 **Revising the earlier characterization:** Decision 9's original text

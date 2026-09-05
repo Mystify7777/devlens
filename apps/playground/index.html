@@ -4,19 +4,21 @@
     <meta charset="UTF-8" />
     <title>DevLens Playground</title>
   </head>
-  <body style="font-family: system-ui; padding: 2rem;">
+  <body style="font-family: system-ui; padding: 2rem">
     <h1>DevLens Playground</h1>
     <span>Legacy</span>
-    <p>Open your browser console/network tab. Every button below feeds an event to the DevLens bus, which currently just logs to <code>console.table</code> until the Panel exists.</p>
-
+    <p>
+      Open your browser console/network tab. Every button below feeds an event to the DevLens bus,
+      which currently just logs to <code>console.table</code> until the Panel exists.
+    </p>
 
     <span>Present</span>
     <p>
-      Trigger runtime, console, and network activity and watch the resulting
-      DevLens events appear live in the embedded Panel.
+      Trigger runtime, console, and network activity and watch the resulting DevLens events appear
+      live in the embedded Panel.
     </p>
 
-    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap">
       <button id="btn-throw">Throw Error</button>
       <button id="btn-reject">Promise.reject()</button>
       <button id="btn-log">console.log()</button>
@@ -31,9 +33,8 @@
     <h2>React</h2>
     <p>
       A real React component tree, wrapped in
-      <code>createDevLensErrorBoundary(bus)</code> from
-      <code>@devlens/react</code>, reporting through the same shared
-      EventBus as everything above.
+      <code>createDevLensErrorBoundary(bus)</code> from <code>@devlens/react</code>, reporting
+      through the same shared EventBus as everything above.
     </p>
     <div id="react-demo-root"></div>
 

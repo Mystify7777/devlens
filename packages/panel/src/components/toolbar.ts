@@ -36,9 +36,7 @@ const ALL_SEVERITIES: readonly EventSeverity[] = [
   "fatal",
 ];
 
-export function createToolbar(
-  onFiltersChange: (filters: FilterState) => void
-): Toolbar {
+export function createToolbar(onFiltersChange: (filters: FilterState) => void): Toolbar {
   const element = document.createElement("div");
   element.setAttribute("data-devlens-toolbar", "");
 
@@ -95,18 +93,8 @@ export function createToolbar(
   }
 
   element.append(
-    createCheckboxGroup(
-      "Severity",
-      "severity",
-      ALL_SEVERITIES,
-      selectedSeverities
-    ),
-    createCheckboxGroup(
-      "Category",
-      "category",
-      ALL_CATEGORIES,
-      selectedCategories
-    )
+    createCheckboxGroup("Severity", "severity", ALL_SEVERITIES, selectedSeverities),
+    createCheckboxGroup("Category", "category", ALL_CATEGORIES, selectedCategories)
   );
 
   return { element };

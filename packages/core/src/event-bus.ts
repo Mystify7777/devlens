@@ -1,9 +1,4 @@
-import type {
-  DevLensEvent,
-  DevLensEventInput,
-  EventCategory,
-  MutableDevLensEvent,
-} from "./types";
+import type { DevLensEvent, DevLensEventInput, EventCategory, MutableDevLensEvent } from "./types";
 import { generateEventId } from "./id";
 import { EventBusDestroyedError, MiddlewareError } from "./errors";
 import { RingBuffer } from "./collections/ring-buffer";
@@ -64,10 +59,7 @@ export function createEventBus(options: EventBusOptions = {}): EventBus {
     }
   }
 
-  function runMiddleware(
-    initial: MutableDevLensEvent,
-    done: (event: MutableDevLensEvent) => void
-  ) {
+  function runMiddleware(initial: MutableDevLensEvent, done: (event: MutableDevLensEvent) => void) {
     let index = -1;
     let current = initial;
 

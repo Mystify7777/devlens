@@ -11,9 +11,7 @@ import { deepFreeze, type DevLensEvent, type EventStore } from "@devlens/core";
  * Never throws for ordinary invalid input — see docs/specs/session-import.md,
  * "Failure contract," for the rationale.
  */
-export type ImportResult =
-  | { ok: true; importedCount: number }
-  | { ok: false; error: ImportError };
+export type ImportResult = { ok: true; importedCount: number } | { ok: false; error: ImportError };
 
 /**
  * Discriminated union of every failure mode importSession() can produce.
@@ -38,14 +36,7 @@ export type ImportError =
 // Internal constants
 // ---------------------------------------------------------------------------
 
-const VALID_SEVERITY = new Set([
-  "trace",
-  "debug",
-  "info",
-  "warn",
-  "error",
-  "fatal",
-]);
+const VALID_SEVERITY = new Set(["trace", "debug", "info", "warn", "error", "fatal"]);
 
 /**
  * Exhaustive set of known DevLensEvent field names for the closed v1 schema.
@@ -139,10 +130,7 @@ export function parseImportInput(
  *
  * Internal — called by validateAllEvents(). Exported for direct testing.
  */
-export function validateEvent(
-  value: unknown,
-  eventIndex: number
-): ImportError | null {
+export function validateEvent(value: unknown, eventIndex: number): ImportError | null {
   // 1. Must be a plain object (no field to name when this fails).
   if (!isPlainObject(value)) {
     return {
@@ -190,10 +178,7 @@ export function validateEvent(
   }
 
   // 5. timestamp must be a finite number.
-  if (
-    typeof value["timestamp"] !== "number" ||
-    !Number.isFinite(value["timestamp"])
-  ) {
+  if (typeof value["timestamp"] !== "number" || !Number.isFinite(value["timestamp"])) {
     return {
       code: "invalid-event-shape",
       eventIndex,

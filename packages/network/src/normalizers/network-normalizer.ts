@@ -17,9 +17,7 @@ import type { CapturedRequest } from "../types";
  * layer, not here. See ADR-0010's Decision section and the research
  * doc's "Outcome and severity are different axes."
  */
-export function normalizeNetworkEvent(
-  request: CapturedRequest
-): DevLensEventInput {
+export function normalizeNetworkEvent(request: CapturedRequest): DevLensEventInput {
   return {
     origin: request.origin,
     category: "network",

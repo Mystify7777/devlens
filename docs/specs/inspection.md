@@ -60,7 +60,7 @@ Decisions made during Session 4 design discussion, resolved one at a
 time per the sequence: Presentation → Selection → Panel state →
 Filtering → Search → Pause/Resume → Export. Each entry records the
 decision and its justification, not just the conclusion — future
-readers should be able to tell *why*, not just *what*.
+readers should be able to tell _why_, not just _what_.
 
 ### Presentation model — Accepted: persistent side inspector
 
@@ -131,8 +131,8 @@ No arrays, no sets, no "active vs. primary" distinction.
 
 **Selection is Panel-local UI state, never Store state.** Extending the
 existing principle ("the panel reflects Store state rather than owning
-event data"): *selection is view state, not event state — it belongs
-to the consumer (Panel), never to the Store.* The Store answers "what
+event data"): _selection is view state, not event state — it belongs
+to the consumer (Panel), never to the Store._ The Store answers "what
 events exist?"; the Panel answers "which event is the user currently
 looking at?" Letting the Store hold selection would mean any other
 consumer (a CLI, a future editor integration) inherits a UI concept
@@ -144,13 +144,13 @@ coupling the Store/Bus split (ADR-0004) was built to avoid.
 
 - If the selected event scrolls beyond `MAX_RENDERED_EVENTS`, selection
   **is retained**. The Store still owns the event; only one
-  *representation* of it (the row) has left view. The inspector
+  _representation_ of it (the row) has left view. The inspector
   continues to reflect it.
 - If a future filter excludes the selected event from the navigable
   set, selection **is cleared**, returning the inspector to its empty
   state. Continuing to show an event the list can no longer display
   would break the "inspector is a projection of the current selection
-  *within the navigation context*" model — the two panes would
+  _within the navigation context_" model — the two panes would
   describe different event sets.
 
 In one sentence: **selection persists while the event exists in the
@@ -272,7 +272,7 @@ purpose test: filtering exists to reduce scanning cost (see
 Principles — "the list is still the primary navigation surface"), and
 a de-emphasized-but-present row doesn't reduce it. It also collides
 with `MAX_RENDERED_EVENTS`: if de-emphasized events still occupy a
-rendered slot, filtering can make the events you *do* want harder to
+rendered slot, filtering can make the events you _do_ want harder to
 find inside the 300-row budget — the opposite of the feature's intent.
 
 **3. Filter state is Panel-local UI state, never Store state** — the
@@ -289,6 +289,7 @@ interface PanelState {
   filters: FilterState;
 }
 ```
+
 (Illustrative shape, not a commitment to a literal object over closure
 variables — same caveat as the Panel state model decision above.)
 
@@ -299,17 +300,17 @@ already-windowed slice.** Today, `panel.ts` computes
 Once a filter exists, the order matters:
 
 - **Filter-then-window (accepted):** filter the full Store, then take
-  the last `MAX_RENDERED_EVENTS` *matching* events. A "severity: error"
+  the last `MAX_RENDERED_EVENTS` _matching_ events. A "severity: error"
   filter shows your most recent errors, however far back they occurred.
 - **Window-then-filter (rejected):** take the last 300 events, then
   filter within that slice. A "severity: error" filter could show
-  *nothing* — not because no errors exist, but because none happened
+  _nothing_ — not because no errors exist, but because none happened
   to fall inside an unrelated, invisible windowing limit the developer
   has no way to know about. That's not a smaller result set, it's an
   incorrect one: the UI would be silently lying about what the Store
   contains.
 
-This means `panel.ts`'s existing slicing logic moves to *after*
+This means `panel.ts`'s existing slicing logic moves to _after_
 filtering rather than before — a small, contained change to something
 already documented as Panel's responsibility (not the renderer's,
 which stays purely mechanical per the ADR-0008 amendment above).
@@ -321,14 +322,14 @@ Selection decision: there's a stage between "what the Store contains"
 and "what's actually rendered."
 
 > **Navigation Context:** the ordered collection of events currently
-> available for navigation — the *result* of applying zero or more
+> available for navigation — the _result_ of applying zero or more
 > view-level transformations (filtering, and later search) to the
 > Store's contents, before presentation constraints like
 > `MAX_RENDERED_EVENTS` are applied.
 
 Precisely: Navigation Context is a **result**, not a transformation
 step. `applyFilters()` is the transformation; the array it returns is
-*a* Navigation Context. This matters once Search exists — Search
+_a_ Navigation Context. This matters once Search exists — Search
 doesn't operate "inside" some single Navigation Context stage, it
 takes one Navigation Context (the output of filtering) and produces
 another. Each pure transformation produces its own Navigation Context;
@@ -361,7 +362,7 @@ Renderer
 This gives a name to the thing Selection's persistence rule was
 already describing without naming it — "cleared... when the event is
 excluded from that context (e.g. by a filter)" (see Selection model,
-above) *is* a statement about a Navigation Context, written before the
+above) _is_ a statement about a Navigation Context, written before the
 term existed. Once named, future features can be specified against it
 directly rather than re-deriving the pipeline each time:
 
@@ -404,14 +405,14 @@ decided — no extra implementation work is required — but it's worth
 stating explicitly: it tells future implementers that filters are a
 **declarative constraint** (a predicate an event either satisfies or
 doesn't), not a **procedural pipeline** where sequence matters. A
-future dimension (e.g. a text search) that *isn't* order-independent
+future dimension (e.g. a text search) that _isn't_ order-independent
 with the others would be a deliberate, notable exception, not a silent
 one.
 
 **Scope note: filter engine vs. filter controls.** This section
-decides the filter *engine* — `FilterState`'s shape and
+decides the filter _engine_ — `FilterState`'s shape and
 `applyFilters()`'s behavior — as pure, DOM-free logic. It deliberately
-does **not** decide filter *controls* — whatever UI lets a developer
+does **not** decide filter _controls_ — whatever UI lets a developer
 actually set `filters` (toolbar, dropdown, chips, keyboard shortcut).
 That's a Presentation-layer concern, decided separately, likely as its
 own small ADR-0008 amendment once it's being built. Keeping these
@@ -424,7 +425,7 @@ click handling or selection ownership (see Panel state model, above).
 membership doesn't change. Filtering is the opposite case: it changes
 which events are in the Navigation Context, which is exactly the
 condition that already triggers a full list re-render today (a Store
-change). So a filter change goes through the *existing* `Store change →
+change). So a filter change goes through the _existing_ `Store change →
 renderEventList()` path — this isn't a new rendering mode, it's the
 current one, invoked for a new reason:
 
@@ -465,7 +466,7 @@ extra state the simplest model doesn't need") for no evidenced benefit.
 (Severity, Category). A dropdown typically implies "pick one";
 checkboxes directly communicate the OR-within-a-dimension behavior
 already decided in the Filtering model — seeing multiple boxes checked
-*is* the mental model, rather than something a developer has to infer.
+_is_ the mental model, rather than something a developer has to infer.
 
 **Architectural constraint carried over from the Filtering model: the
 toolbar never calls `applyFilters()`.** Its only outward call is
@@ -570,9 +571,9 @@ Renderer
 principle, not just a build order.** The search engine has no
 knowledge of text inputs, focus, keyboard events, rendering, or
 highlighting. It knows only `applySearch(events, query): DevLensEvent[]`.
-Search *input* (a text field), *match highlighting* (decorating
-matched substrings in rendered rows/inspector text), and *keyboard
-navigation* (traversing the Navigation Context — a Navigation concern,
+Search _input_ (a text field), _match highlighting_ (decorating
+matched substrings in rendered rows/inspector text), and _keyboard
+navigation_ (traversing the Navigation Context — a Navigation concern,
 not a Search one; explicitly un-bundled from this milestone) are each
 separate, later slices, following the exact engine-then-controls
 sequence Filtering already proved out:
@@ -628,7 +629,7 @@ indexing problem to solve then, not a reason to add input latency now.
 **2. The search box is its own component, not folded into the
 toolbar.** `createSearchBox(onQueryChange)` lives beside
 `createToolbar(onFiltersChange)`, not inside it. They're both filter
-*controls* in the broad sense (both narrow the Navigation Context, both
+_controls_ in the broad sense (both narrow the Navigation Context, both
 sit above the event list, per the Filtering model's placement
 rationale), but they drive independent state (`filters` vs.
 `searchQuery`) through independent seams (`setFilters()` vs.
@@ -637,7 +638,7 @@ that. See ADR-0008's Session 6 amendment for the resulting region
 structure.
 
 **Scope note, mirroring Filtering's engine/controls split: Search
-*presentation* is explicitly not decided here.** Match highlighting
+_presentation_ is explicitly not decided here.** Match highlighting
 (in the list, the inspector, or both), a "no results" empty state
 distinct from "nothing selected," and a match count are all
 rendering concerns layered on top of a Navigation Context that's
@@ -700,7 +701,7 @@ many total") nobody's asking when nothing is narrowing anything.
 
 #### Where highlighting lives: a pure rendering helper, not per-component logic
 
-`event-row.ts` and `inspector.ts` own *that* they highlight and *which*
+`event-row.ts` and `inspector.ts` own _that_ they highlight and _which_
 fields; neither owns substring matching, `<mark>` construction, or
 escaping. Those live in one shared function,
 `highlightText(text, query)`, that both components call. This buys two
@@ -710,7 +711,7 @@ one-file change instead of an N-component change, and the matching
 logic gets one focused test suite instead of being re-verified
 per-component.
 
-This is a pure rendering *leaf*, in the same sense `applyFilters()` and
+This is a pure rendering _leaf_, in the same sense `applyFilters()` and
 `applySearch()` are — deterministic output from its inputs, no DOM
 side effects beyond the fragment it returns, no dependency on Panel,
 the Store, or the search engine. It has no idea `applySearch()` exists;
@@ -723,7 +724,7 @@ already going to be rendered, for events already known to match. There
 is deliberately no path by which highlighting output feeds back into
 search, filtering, or selection. (This is what keeps the two systems
 independently testable and prevents a class of bug where, say,
-inserted markup accidentally changes what a *later* search considers a
+inserted markup accidentally changes what a _later_ search considers a
 match.)
 
 **Invariant: highlighting preserves text exactly.** Stripping
@@ -751,7 +752,7 @@ inspector show? — that only exist because of the invented state.
 Rejected outright, not deferred.
 
 **2. Traversal scope, precisely worded: keyboard navigation traverses
-the currently *rendered* portion of the Navigation Context — not "the
+the currently _rendered_ portion of the Navigation Context — not "the
 Navigation Context" unqualified, and not "the rendered window" as an
 independent concept.** The Navigation Context is still the thing being
 navigated, conceptually; today's renderer just exposes only a window
@@ -775,7 +776,7 @@ Wraparound is easy to add later if it's ever actually missed.
 first visible row — not "next selects first, previous selects last."**
 There is no current position to move relative to, so falling back to
 the first row is the deterministic choice for either direction.
-Defaulting "previous" to the *last* row would be asymmetric behavior a
+Defaulting "previous" to the _last_ row would be asymmetric behavior a
 developer has no way to anticipate the first time they press an arrow
 key with nothing selected.
 
@@ -817,8 +818,8 @@ scrolling into view would be unusable) but is deliberately **not** a
 new method on `Renderer`. `setSelectedRow()`'s public contract is
 unchanged; internally, after applying the `data-selected` highlight, it
 calls a private helper that scrolls the row into view if needed.
-Scrolling is a *consequence* of selection, not part of what selection
-*means* — keeping it as an internal implementation detail means future
+Scrolling is a _consequence_ of selection, not part of what selection
+_means_ — keeping it as an internal implementation detail means future
 changes (scroll only if outside the viewport vs. always scroll to a
 fixed position, an animated scroll, etc.) never touch the public API
 or any caller.
@@ -835,9 +836,9 @@ left as an unstated assumption.
 ### Pause/Resume/Clear/Export model — Accepted: operational layer, not a rendering layer; viewport-freeze pause; Store-scoped export
 
 Everything decided above (Presentation, Selection, Filtering, Search,
-Keyboard Navigation) answers *which events the developer sees and how
-they move through them*. This phase answers a different question:
-*what control does the developer have over the stream itself?* Four
+Keyboard Navigation) answers _which events the developer sees and how
+they move through them_. This phase answers a different question:
+_what control does the developer have over the stream itself?_ Four
 sub-decisions, recorded together because — like Filtering and Search —
 they only cohere as a set, plus one constraint that governs all four.
 
@@ -853,7 +854,7 @@ do not change.**
   above extends naturally to this phase.
 - **No parallel pipeline.** There is no "paused Navigation Context" or
   "paused Store." `Store → applyFilters() → applySearch() → window() →
-  Renderer` remains the one pipeline. Pause changes *when* the Panel
+Renderer` remains the one pipeline. Pause changes _when_ the Panel
   chooses to run that pipeline, never what it computes.
 - **Renderer stays exactly as dumb as it already is.** It has no
   concept of paused/resumed/exporting/clearing; it renders whatever
@@ -876,8 +877,8 @@ Panel-local state.
 > should be treated as a regression against this invariant, not a
 > reasonable extension of it.
 
-**1. Pause semantics: pause freezes the Panel's *viewport*, not the
-Store's *capture*.** Runtime, Console, and the Store continue exactly
+**1. Pause semantics: pause freezes the Panel's _viewport_, not the
+Store's _capture_.** Runtime, Console, and the Store continue exactly
 as before while paused — events keep arriving and keep being retained,
 up to the Store's own limits. What changes is narrower: the Panel's
 Store-subscription callback stops re-deriving and re-rendering the
@@ -898,8 +899,8 @@ variables.)
 
 **Rejected: pause stops capture (e.g. by unsubscribing the Runtime/
 Console plugins, or telling the Bus to stop dispatching).** This would
-mean pausing DevLens changes what the *application* does, not just
-what the *panel shows* — a diagnostics tool silently dropping events
+mean pausing DevLens changes what the _application_ does, not just
+what the _panel shows_ — a diagnostics tool silently dropping events
 while "paused" is actively dangerous: the exact error a developer
 paused to go read could be followed by three more that never get
 captured. Framed the way the brief put it: pause means "stop
@@ -919,7 +920,7 @@ currently paused?" so a future Pause/Resume control can render the
 right label — but this is a narrow, one-off read, not a reason to
 introduce a general `onStateChange()`-style observation mechanism.
 `isPaused: boolean` is Panel-owned state (per the constraint above);
-exposing a way to *read* it doesn't move ownership anywhere, the same
+exposing a way to _read_ it doesn't move ownership anywhere, the same
 way `store.getAll()` lets you read Store state without the Store
 becoming reactive. A broader state-observation API is a real
 architectural step this project hasn't needed yet and shouldn't invent
@@ -936,7 +937,7 @@ path — "a new event arrived, re-derive and re-render" — is what pause
 suppresses. This is the same "don't reapply a rule outside the context
 it was written for" reasoning already used once in this document (see
 Panel state model, above, on selection vs. Store re-renders): pause is
-a statement about *automatic* refresh, not about *all* rendering.
+a statement about _automatic_ refresh, not about _all_ rendering.
 
 **3. Resume performs exactly one explicit resync — no replay.** On
 resume, the Panel reads `store.getAll()` once, recomputes the
@@ -973,7 +974,7 @@ panel clear()
 `refresh()` runs unconditionally here, even if the Panel is currently
 paused — Clear is an explicit developer action (like `setFilters()`),
 not an automatic Store-driven update, so the same reasoning from
-decision 2 applies: pause only suppresses the *automatic* path.
+decision 2 applies: pause only suppresses the _automatic_ path.
 
 **Consequence, not a new rule:** clearing empties the Navigation
 Context, which means a currently-selected event (if any) is no longer
@@ -1056,7 +1057,7 @@ letting one region diverge from that record undermines the reason the
 prior two amendments were written at all. This phase gets the same
 treatment — see ADR-0008's Session 7 amendment.
 
-#### Summary of what does *not* change
+#### Summary of what does _not_ change
 
 Worth stating plainly, since this phase's whole shape is "prove the
 architecture absorbs this without new layers":
@@ -1086,8 +1087,8 @@ As a developer using an app with DevLens embedded...
 - ...I want to export the current session as JSON, so I can share a
   bug report without asking someone to reproduce it live.
 
-*(To be expanded/refined during Session 4 design discussion — this is
-a starting set, not exhaustive.)*
+_(To be expanded/refined during Session 4 design discussion — this is
+a starting set, not exhaustive.)_
 
 ## Open questions
 

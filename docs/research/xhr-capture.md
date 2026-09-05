@@ -54,9 +54,9 @@ For a normal **asynchronous** request that succeeds: `readystatechange`
 (→`OPENED`) → `loadstart` → `readystatechange` (→`HEADERS_RECEIVED`) →
 `readystatechange` (→`LOADING`) → zero or more `progress` → `readystatechange`
 (→`DONE`) → `load` → `loadend`. The exact WHATWG spec text for the
-success path: *fire a progress event named progress, set state to
+success path: _fire a progress event named progress, set state to
 done, fire readystatechange, fire a progress event named load, fire a
-progress event named loadend* — `load` and `loadend` are the last two
+progress event named loadend_ — `load` and `loadend` are the last two
 events, in that order, every time, for every non-synchronous request
 regardless of outcome category.
 
@@ -70,8 +70,8 @@ Question 1's "how does this prevent duplicate reporting" — `loadend`
 fires exactly once per request lifecycle (verified below for the
 abort-after-completion edge case too), so a completion handler
 attached to it, and only it, cannot double-report the way listening to
-multiple individual event types (`load` *and* `error` *and* `abort`
-*and* `timeout`) could if implemented carelessly.
+multiple individual event types (`load` _and_ `error` _and_ `abort`
+_and_ `timeout`) could if implemented carelessly.
 
 ### `abort()` behavior — verified, not assumed
 
@@ -107,14 +107,14 @@ non-empty.
 **`loadend` is the single completion signal for async XHR — analogous
 to Fetch's Promise settling, but arrived at differently.** Fetch has
 exactly one terminal state by construction (a Promise can only settle
-once); XHR has to be *shown* to have exactly one terminal event, which
+once); XHR has to be _shown_ to have exactly one terminal event, which
 the `abort()`-after-`DONE` behavior above and the spec's own event
 sequence both confirm. `readystatechange` reaching `DONE` is
 tempting to use instead (it's the "traditional" XHR completion check
 many older codebases use), but MDN explicitly warns
 `readystatechange` "should not be used with synchronous requests," and
 — as the next section shows — for sync requests it isn't fired at
-all, which rules it out as a *general* completion mechanism even
+all, which rules it out as a _general_ completion mechanism even
 though it happens to work for async requests specifically. `loadend`
 doesn't have that asymmetry for async requests, which is one more
 reason to prefer it.
@@ -143,10 +143,10 @@ problem, not just filled in detail.
 
 **Verified directly from the WHATWG spec text: synchronous XHR does
 not fire `progress`, `readystatechange`, `load`, or `loadend` at all.**
-The spec's own completion steps are explicitly gated: *"If xhr's
+The spec's own completion steps are explicitly gated: _"If xhr's
 synchronous is false, then fire a progress event... fire an event
 named readystatechange... fire a progress event named load... fire a
-progress event named loadend."* Every one of those four events is
+progress event named loadend."_ Every one of those four events is
 conditioned on `synchronous` being `false`. For a synchronous request,
 none of them fire — not "fire late," not "fire in a different order,"
 they are not dispatched at all. This isn't inferred from confusing
@@ -204,7 +204,7 @@ that was never sent, symmetric to Fetch's own synchronous-throw case
 
 ## Abort / timeout / error — classification evidence
 
-This is where XHR gives DevLens *better* evidence than Fetch did, not
+This is where XHR gives DevLens _better_ evidence than Fetch did, not
 just different evidence.
 
 - **`ontimeout`/ the `timeout` event fires specifically and only when
@@ -236,7 +236,7 @@ firing IS the evidence for `timeout`, `onabort` firing IS the evidence
 for `aborted`, and `onerror` firing (when neither of the other two
 applies) IS the evidence for `network-error`. Whether that means XHR's
 capture layer produces a `FetchSettlement`-shaped input to the
-*existing* `classifyFetchOutcome()` (renamed, or reused as-is if it's
+_existing_ `classifyFetchOutcome()` (renamed, or reused as-is if it's
 already source-agnostic enough) or needs its own
 `classifyXhrOutcome()` is a Step 4B/4D implementation question, not a
 research one — but the research answer to "does the existing
@@ -250,7 +250,7 @@ XHR-native signal maps onto an outcome value that already exists
 manual-mode equivalent to Fetch's `redirect: "manual"`.** There is no
 API surface to observe intermediate hops; `xhr.responseURL` exposes
 only the final URL after any redirects completed. This makes XHR's
-redirect story *simpler* than Fetch's, not harder — the "should v1
+redirect story _simpler_ than Fetch's, not harder — the "should v1
 opt into surfacing intermediate hops" open question `network-capture.md`
 left open for Fetch doesn't even have an XHR equivalent to resolve,
 since XHR never offers a mechanism to opt into that visibility at all.
@@ -262,8 +262,8 @@ produce a readable-but-limited response the way an opaque Fetch
 response does — it fails outright: the `error` event fires, `status`
 reads `0`, and no response body or headers are available at all. This
 is genuinely different from Fetch's opaque case, not a variant of it:
-Fetch's opaque response is a *successful settlement* with deliberately
-withheld detail; XHR's CORS failure is an *error settlement* with no
+Fetch's opaque response is a _successful settlement_ with deliberately
+withheld detail; XHR's CORS failure is an _error settlement_ with no
 detail because nothing was received. Concretely, this means the
 `opaque` outcome value (added to `NetworkOutcome` during the Fetch
 classification-contract discussion) has no XHR-side producer — XHR's
@@ -349,14 +349,14 @@ Mirroring `network-capture.md`'s own table, evaluated against what
 Fetch already proved rather than against general principles restated
 from scratch:
 
-| Principle | Candidate A (async only) |
-|---|---|
-| Reuses `CapturedRequest` → `normalizeNetworkEvent()` without modification | Yes |
-| Reuses the existing `NetworkOutcome` enum without new values | Yes — verified above, XHR's evidence maps onto values that already exist |
-| One occurrence → one event | Yes — `loadend` fires exactly once per async request lifecycle, verified via the abort-after-`DONE` no-op behavior |
-| Panel needs no new concept | Yes, for the same reason Fetch didn't need one — `origin: "xhr"` is the only marker, exactly as ADR-0010 anticipated |
-| Complexity stays inside `@devlens/network` | Yes |
-| Covers 100% of what `XMLHttpRequest` can do | **No** — synchronous requests are explicitly out of scope for this candidate |
+| Principle                                                                 | Candidate A (async only)                                                                                             |
+| ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Reuses `CapturedRequest` → `normalizeNetworkEvent()` without modification | Yes                                                                                                                  |
+| Reuses the existing `NetworkOutcome` enum without new values              | Yes — verified above, XHR's evidence maps onto values that already exist                                             |
+| One occurrence → one event                                                | Yes — `loadend` fires exactly once per async request lifecycle, verified via the abort-after-`DONE` no-op behavior   |
+| Panel needs no new concept                                                | Yes, for the same reason Fetch didn't need one — `origin: "xhr"` is the only marker, exactly as ADR-0010 anticipated |
+| Complexity stays inside `@devlens/network`                                | Yes                                                                                                                  |
+| Covers 100% of what `XMLHttpRequest` can do                               | **No** — synchronous requests are explicitly out of scope for this candidate                                         |
 
 That last row is the honest state of this research: Candidate A is a
 strong, low-risk design for the overwhelming majority of real-world

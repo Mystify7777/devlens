@@ -7,49 +7,37 @@ import {
 import type { ImportResult } from "../import";
 
 function getPauseButton(root: HTMLElement): HTMLButtonElement {
-  const el = root.querySelector<HTMLButtonElement>(
-    "[data-devlens-session-pause-button]"
-  );
+  const el = root.querySelector<HTMLButtonElement>("[data-devlens-session-pause-button]");
   if (!el) throw new Error("pause button not found");
   return el;
 }
 
 function getClearButton(root: HTMLElement): HTMLButtonElement {
-  const el = root.querySelector<HTMLButtonElement>(
-    "[data-devlens-session-clear-button]"
-  );
+  const el = root.querySelector<HTMLButtonElement>("[data-devlens-session-clear-button]");
   if (!el) throw new Error("clear button not found");
   return el;
 }
 
 function getExportButton(root: HTMLElement): HTMLButtonElement {
-  const el = root.querySelector<HTMLButtonElement>(
-    "[data-devlens-session-export-button]"
-  );
+  const el = root.querySelector<HTMLButtonElement>("[data-devlens-session-export-button]");
   if (!el) throw new Error("export button not found");
   return el;
 }
 
 function getImportButton(root: HTMLElement): HTMLButtonElement {
-  const el = root.querySelector<HTMLButtonElement>(
-    "[data-devlens-session-import-button]"
-  );
+  const el = root.querySelector<HTMLButtonElement>("[data-devlens-session-import-button]");
   if (!el) throw new Error("import button not found");
   return el;
 }
 
 function getImportInput(root: HTMLElement): HTMLInputElement {
-  const el = root.querySelector<HTMLInputElement>(
-    "[data-devlens-session-import-input]"
-  );
+  const el = root.querySelector<HTMLInputElement>("[data-devlens-session-import-input]");
   if (!el) throw new Error("import input not found");
   return el;
 }
 
 function getImportStatus(root: HTMLElement): HTMLElement {
-  const el = root.querySelector<HTMLElement>(
-    "[data-devlens-session-import-status]"
-  );
+  const el = root.querySelector<HTMLElement>("[data-devlens-session-import-status]");
   if (!el) throw new Error("import status region not found");
   return el;
 }
@@ -62,10 +50,7 @@ function getImportStatus(root: HTMLElement): HTMLElement {
  * test (session-controls.ts's handling of both outcomes), not
  * jsdom's file-reading fidelity.
  */
-function selectFile(
-  input: HTMLInputElement,
-  file: { text: () => Promise<string> }
-): void {
+function selectFile(input: HTMLInputElement, file: { text: () => Promise<string> }): void {
   Object.defineProperty(input, "files", {
     value: [file],
     configurable: true,
@@ -81,18 +66,14 @@ function unreadableFile(): { text: () => Promise<string> } {
   return { text: () => Promise.reject(new Error("read error")) };
 }
 
-function makeHandlers(
-  overrides: Partial<SessionControlsHandlers> = {}
-): SessionControlsHandlers {
+function makeHandlers(overrides: Partial<SessionControlsHandlers> = {}): SessionControlsHandlers {
   return {
     onPause: vi.fn(),
     onResume: vi.fn(),
     onClear: vi.fn(),
     onExport: vi.fn(() => "[]"),
     isPaused: vi.fn(() => false),
-    onImport: vi.fn(
-      (): ImportResult => ({ ok: true, importedCount: 0 })
-    ),
+    onImport: vi.fn((): ImportResult => ({ ok: true, importedCount: 0 })),
     ...overrides,
   };
 }
@@ -100,9 +81,7 @@ function makeHandlers(
 describe("createSessionControls", () => {
   it("carries a data-devlens-session-controls attribute on its root element", () => {
     const controls = createSessionControls(makeHandlers());
-    expect(
-      controls.element.hasAttribute("data-devlens-session-controls")
-    ).toBe(true);
+    expect(controls.element.hasAttribute("data-devlens-session-controls")).toBe(true);
   });
 
   it("renders exactly four buttons: pause/resume, clear, export, import", () => {
@@ -112,16 +91,12 @@ describe("createSessionControls", () => {
 
   describe("pause/resume toggle", () => {
     it('labels itself "Pause" when isPaused() is false at creation', () => {
-      const controls = createSessionControls(
-        makeHandlers({ isPaused: () => false })
-      );
+      const controls = createSessionControls(makeHandlers({ isPaused: () => false }));
       expect(getPauseButton(controls.element).textContent).toBe("Pause");
     });
 
     it('labels itself "Resume" when isPaused() is true at creation', () => {
-      const controls = createSessionControls(
-        makeHandlers({ isPaused: () => true })
-      );
+      const controls = createSessionControls(makeHandlers({ isPaused: () => true }));
       expect(getPauseButton(controls.element).textContent).toBe("Resume");
     });
 
@@ -172,13 +147,9 @@ describe("createSessionControls", () => {
       const controls = createSessionControls(handlers);
       const button = getPauseButton(controls.element);
 
-      expect(button.getAttribute("data-devlens-session-state")).toBe(
-        "running"
-      );
+      expect(button.getAttribute("data-devlens-session-state")).toBe("running");
       button.click();
-      expect(button.getAttribute("data-devlens-session-state")).toBe(
-        "paused"
-      );
+      expect(button.getAttribute("data-devlens-session-state")).toBe("paused");
     });
   });
 
@@ -228,9 +199,7 @@ describe("createSessionControls", () => {
       // the download was *triggered* without jsdom logging "Not
       // implemented: navigation" noise for a click that was never
       // going anywhere real to begin with.
-      anchorClickSpy = vi
-        .spyOn(HTMLAnchorElement.prototype, "click")
-        .mockImplementation(() => {});
+      anchorClickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
     });
 
     afterEach(() => {
@@ -287,13 +256,11 @@ describe("createSessionControls", () => {
     it("sets the anchor's download attribute to a devlens-session-*.json filename", () => {
       let capturedAnchor: HTMLAnchorElement | undefined;
       const originalCreateElement = document.createElement.bind(document);
-      vi.spyOn(document, "createElement").mockImplementation(
-        ((tag: string) => {
-          const el = originalCreateElement(tag);
-          if (tag === "a") capturedAnchor = el as HTMLAnchorElement;
-          return el;
-        }) as typeof document.createElement
-      );
+      vi.spyOn(document, "createElement").mockImplementation(((tag: string) => {
+        const el = originalCreateElement(tag);
+        if (tag === "a") capturedAnchor = el as HTMLAnchorElement;
+        return el;
+      }) as typeof document.createElement);
 
       const handlers = makeHandlers();
       const controls = createSessionControls(handlers);
@@ -327,9 +294,7 @@ describe("createSessionControls", () => {
       const controls = createSessionControls(handlers);
 
       selectFile(getImportInput(controls.element), fakeFile('[{"id":"e1"}]'));
-      await vi.waitFor(() =>
-        expect(handlers.onImport).toHaveBeenCalledTimes(1)
-      );
+      await vi.waitFor(() => expect(handlers.onImport).toHaveBeenCalledTimes(1));
 
       expect(handlers.onImport).toHaveBeenCalledWith('[{"id":"e1"}]');
     });
@@ -359,60 +324,46 @@ describe("createSessionControls", () => {
       const status = getImportStatus(controls.element);
       await vi.waitFor(() => expect(status.textContent).toContain("3"));
 
-      expect(status.getAttribute("data-devlens-session-import-outcome")).toBe(
-        "success"
-      );
+      expect(status.getAttribute("data-devlens-session-import-outcome")).toBe("success");
     });
 
     it("shows the store-not-empty message pointing at Clear when the Store isn't empty", async () => {
       const handlers = makeHandlers({
-        onImport: vi.fn(
-          (): ImportResult => ({
-            ok: false,
-            error: {
-              code: "store-not-empty",
-              message: "Store must be empty before import.",
-            },
-          })
-        ),
+        onImport: vi.fn((): ImportResult => ({
+          ok: false,
+          error: {
+            code: "store-not-empty",
+            message: "Store must be empty before import.",
+          },
+        })),
       });
       const controls = createSessionControls(handlers);
 
       selectFile(getImportInput(controls.element), fakeFile("[]"));
 
       const status = getImportStatus(controls.element);
-      await vi.waitFor(() =>
-        expect(status.textContent).toMatch(/clear/i)
-      );
+      await vi.waitFor(() => expect(status.textContent).toMatch(/clear/i));
 
-      expect(status.getAttribute("data-devlens-session-import-outcome")).toBe(
-        "error"
-      );
+      expect(status.getAttribute("data-devlens-session-import-outcome")).toBe("error");
     });
 
     it("shows the underlying error message for other structured import failures", async () => {
       const handlers = makeHandlers({
-        onImport: vi.fn(
-          (): ImportResult => ({
-            ok: false,
-            error: {
-              code: "invalid-json",
-              message: "Import input is not valid JSON.",
-            },
-          })
-        ),
+        onImport: vi.fn((): ImportResult => ({
+          ok: false,
+          error: {
+            code: "invalid-json",
+            message: "Import input is not valid JSON.",
+          },
+        })),
       });
       const controls = createSessionControls(handlers);
 
       selectFile(getImportInput(controls.element), fakeFile("not json"));
 
       const status = getImportStatus(controls.element);
-      await vi.waitFor(() =>
-        expect(status.textContent).toBe("Import input is not valid JSON.")
-      );
-      expect(status.getAttribute("data-devlens-session-import-outcome")).toBe(
-        "error"
-      );
+      await vi.waitFor(() => expect(status.textContent).toBe("Import input is not valid JSON."));
+      expect(status.getAttribute("data-devlens-session-import-outcome")).toBe("error");
     });
 
     it("shows a read-failure message, without calling onImport(), when File.text() rejects", async () => {
@@ -422,14 +373,10 @@ describe("createSessionControls", () => {
       selectFile(getImportInput(controls.element), unreadableFile());
 
       const status = getImportStatus(controls.element);
-      await vi.waitFor(() =>
-        expect(status.textContent).toContain("Could not read")
-      );
+      await vi.waitFor(() => expect(status.textContent).toContain("Could not read"));
 
       expect(handlers.onImport).not.toHaveBeenCalled();
-      expect(status.getAttribute("data-devlens-session-import-outcome")).toBe(
-        "error"
-      );
+      expect(status.getAttribute("data-devlens-session-import-outcome")).toBe("error");
     });
 
     it("resets the input value after handling a selection, so the same file can be re-selected", async () => {
@@ -445,9 +392,7 @@ describe("createSessionControls", () => {
 
     it("clears a previous status message at the start of a new attempt", async () => {
       const handlers = makeHandlers({
-        onImport: vi.fn(
-          (): ImportResult => ({ ok: true, importedCount: 1 })
-        ),
+        onImport: vi.fn((): ImportResult => ({ ok: true, importedCount: 1 })),
       });
       const controls = createSessionControls(handlers);
       const input = getImportInput(controls.element);
@@ -473,9 +418,7 @@ describe("createSessionControls", () => {
 describe("sessionExportFilename", () => {
   it("formats as devlens-session-YYYY-MM-DDTHH-mm-ss.json", () => {
     const date = new Date("2026-08-06T08:03:12.345Z");
-    expect(sessionExportFilename(date)).toBe(
-      "devlens-session-2026-08-06T08-03-12.json"
-    );
+    expect(sessionExportFilename(date)).toBe("devlens-session-2026-08-06T08-03-12.json");
   });
 
   it("replaces colons with dashes (invalid in Windows filenames)", () => {

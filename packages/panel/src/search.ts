@@ -6,10 +6,7 @@ import type { DevLensEvent } from "@devlens/core";
  * with no stack) — absent fields simply never match, they are not
  * coerced into an empty-string match.
  */
-function fieldMatches(
-  field: string | undefined,
-  normalizedQuery: string
-): boolean {
+function fieldMatches(field: string | undefined, normalizedQuery: string): boolean {
   return field !== undefined && field.toLowerCase().includes(normalizedQuery);
 }
 
@@ -50,10 +47,7 @@ function eventMatches(event: DevLensEvent, normalizedQuery: string): boolean {
  * equals applySearch(events, q) — see inspection.md's Search
  * invariants.
  */
-export function applySearch(
-  events: readonly DevLensEvent[],
-  query: string
-): DevLensEvent[] {
+export function applySearch(events: readonly DevLensEvent[], query: string): DevLensEvent[] {
   const normalizedQuery = query.trim().toLowerCase();
 
   if (normalizedQuery === "") {

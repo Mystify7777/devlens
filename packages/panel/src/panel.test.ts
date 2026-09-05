@@ -100,9 +100,7 @@ function getPanelRoot(): ShadowRoot | undefined {
 }
 
 function clickRow(eventId: string): void {
-  const row = getPanelRoot()?.querySelector(
-    `[data-devlens-event-id="${eventId}"]`
-  );
+  const row = getPanelRoot()?.querySelector(`[data-devlens-event-id="${eventId}"]`);
   row?.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
 }
 
@@ -111,9 +109,9 @@ function clickRow(eventId: string): void {
 // tests) — hoisted here rather than duplicated in each, alongside the
 // other cross-cutting helpers above.
 function renderedTitles(): string[] {
-  return Array.from(
-    getPanelRoot()?.querySelectorAll("[data-devlens-event-title]") ?? []
-  ).map((el) => el.textContent);
+  return Array.from(getPanelRoot()?.querySelectorAll("[data-devlens-event-title]") ?? []).map(
+    (el) => el.textContent
+  );
 }
 
 describe("createPanel", () => {
@@ -122,16 +120,14 @@ describe("createPanel", () => {
   });
 
   it("renders existing store contents on install", () => {
-    const store = createFakeStore([
-      makeEvent({ title: "Existing Event" }),
-    ]);
+    const store = createFakeStore([makeEvent({ title: "Existing Event" })]);
     const panel = createPanel(store);
 
     panel.install();
 
-    expect(
-      getPanelRoot()?.querySelector("[data-devlens-event-title]")?.textContent
-    ).toBe("Existing Event");
+    expect(getPanelRoot()?.querySelector("[data-devlens-event-title]")?.textContent).toBe(
+      "Existing Event"
+    );
 
     panel.uninstall();
   });
@@ -143,9 +139,9 @@ describe("createPanel", () => {
     panel.install();
     store.add(makeEvent({ title: "New Event" }));
 
-    expect(
-      getPanelRoot()?.querySelector("[data-devlens-event-title]")?.textContent
-    ).toBe("New Event");
+    expect(getPanelRoot()?.querySelector("[data-devlens-event-title]")?.textContent).toBe(
+      "New Event"
+    );
 
     panel.uninstall();
   });
@@ -203,18 +199,16 @@ describe("createPanel", () => {
 
     store.add(makeEvent({ title: "After Reinstall" }));
 
-    expect(
-      getPanelRoot()?.querySelector("[data-devlens-event-title]")?.textContent
-    ).toBe("After Reinstall");
+    expect(getPanelRoot()?.querySelector("[data-devlens-event-title]")?.textContent).toBe(
+      "After Reinstall"
+    );
     expect(store.getSubscriberCount()).toBe(1);
 
     panel.uninstall();
   });
 
   it("slices the initial render to MAX_RENDERED_EVENTS", () => {
-    const manyEvents = Array.from({ length: 500 }, (_, i) =>
-      makeEvent({ title: `Event ${i}` })
-    );
+    const manyEvents = Array.from({ length: 500 }, (_, i) => makeEvent({ title: `Event ${i}` }));
     const store = createFakeStore(manyEvents);
     const panel = createPanel(store);
 
@@ -234,9 +228,7 @@ describe("createPanel", () => {
   });
 
   it("keeps rendering only the last MAX_RENDERED_EVENTS when a new event arrives while already over the limit", () => {
-    const manyEvents = Array.from({ length: 500 }, (_, i) =>
-      makeEvent({ title: `Event ${i}` })
-    );
+    const manyEvents = Array.from({ length: 500 }, (_, i) => makeEvent({ title: `Event ${i}` }));
     const store = createFakeStore(manyEvents);
     const panel = createPanel(store);
 
@@ -254,8 +246,7 @@ describe("createPanel", () => {
     const titleElements = Array.from(
       getPanelRoot()?.querySelectorAll("[data-devlens-event-title]") ?? []
     );
-    const lastRenderedTitle =
-      titleElements[titleElements.length - 1]?.textContent;
+    const lastRenderedTitle = titleElements[titleElements.length - 1]?.textContent;
     expect(lastRenderedTitle).toBe("Event 500");
 
     panel.uninstall();
@@ -278,10 +269,9 @@ describe("createPanel selection behavior", () => {
     const events = store.getAll();
     clickRow(events[1].id);
 
-    expect(
-      getPanelRoot()?.querySelector("[data-devlens-inspector-title]")
-        ?.textContent
-    ).toBe("Second Event");
+    expect(getPanelRoot()?.querySelector("[data-devlens-inspector-title]")?.textContent).toBe(
+      "Second Event"
+    );
 
     panel.uninstall();
   });
@@ -294,9 +284,7 @@ describe("createPanel selection behavior", () => {
     const events = store.getAll();
     clickRow(events[0].id);
 
-    const row = getPanelRoot()?.querySelector(
-      `[data-devlens-event-id="${events[0].id}"]`
-    );
+    const row = getPanelRoot()?.querySelector(`[data-devlens-event-id="${events[0].id}"]`);
     expect(row?.hasAttribute("data-selected")).toBe(true);
 
     panel.uninstall();
@@ -311,12 +299,8 @@ describe("createPanel selection behavior", () => {
     clickRow(events[0].id);
     clickRow(events[1].id);
 
-    const firstRow = getPanelRoot()?.querySelector(
-      `[data-devlens-event-id="${events[0].id}"]`
-    );
-    const secondRow = getPanelRoot()?.querySelector(
-      `[data-devlens-event-id="${events[1].id}"]`
-    );
+    const firstRow = getPanelRoot()?.querySelector(`[data-devlens-event-id="${events[0].id}"]`);
+    const secondRow = getPanelRoot()?.querySelector(`[data-devlens-event-id="${events[1].id}"]`);
     expect(firstRow?.hasAttribute("data-selected")).toBe(false);
     expect(secondRow?.hasAttribute("data-selected")).toBe(true);
 
@@ -328,16 +312,12 @@ describe("createPanel selection behavior", () => {
     const panel = createPanel(store);
     panel.install();
 
-    const rowsBefore = getPanelRoot()?.querySelectorAll(
-      "[data-devlens-event-row]"
-    );
+    const rowsBefore = getPanelRoot()?.querySelectorAll("[data-devlens-event-row]");
     const nodeBefore = rowsBefore?.[0];
 
     clickRow(store.getAll()[1].id);
 
-    const rowsAfter = getPanelRoot()?.querySelectorAll(
-      "[data-devlens-event-row]"
-    );
+    const rowsAfter = getPanelRoot()?.querySelectorAll("[data-devlens-event-row]");
     // Same DOM node reference, not a rebuilt one — proves selection
     // changes don't trigger event-list reconstruction, per
     // inspection.md's Panel state model decision.
@@ -356,16 +336,13 @@ describe("createPanel selection behavior", () => {
 
     store.add(makeEvent({ title: "New Event" }));
 
-    const row = getPanelRoot()?.querySelector(
-      `[data-devlens-event-id="${selectedId}"]`
-    );
+    const row = getPanelRoot()?.querySelector(`[data-devlens-event-id="${selectedId}"]`);
     expect(row?.hasAttribute("data-selected")).toBe(true);
     // Inspector still reflects the original selection — a Store
     // update alone must not change what's selected.
-    expect(
-      getPanelRoot()?.querySelector("[data-devlens-inspector-title]")
-        ?.textContent
-    ).toBe("Selected");
+    expect(getPanelRoot()?.querySelector("[data-devlens-inspector-title]")?.textContent).toBe(
+      "Selected"
+    );
 
     panel.uninstall();
   });
@@ -386,15 +363,10 @@ describe("createPanel selection behavior", () => {
     // but the inspector still reflects the selection per the spec's
     // persistence rule ("selection is retained ... only one
     // representation of it has left view").
-    expect(
-      getPanelRoot()?.querySelector(
-        `[data-devlens-event-id="${selectedId}"]`
-      )
-    ).toBeNull();
-    expect(
-      getPanelRoot()?.querySelector("[data-devlens-inspector-title]")
-        ?.textContent
-    ).toBe("Will Scroll Out");
+    expect(getPanelRoot()?.querySelector(`[data-devlens-event-id="${selectedId}"]`)).toBeNull();
+    expect(getPanelRoot()?.querySelector("[data-devlens-inspector-title]")?.textContent).toBe(
+      "Will Scroll Out"
+    );
 
     panel.uninstall();
   });
@@ -406,13 +378,9 @@ describe("createPanel selection behavior", () => {
 
     getPanelRoot()
       ?.querySelector("[data-devlens-event-list]")
-      ?.dispatchEvent(
-        new MouseEvent("click", { bubbles: true, composed: true })
-      );
+      ?.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
 
-    expect(
-      getPanelRoot()?.querySelector("[data-devlens-inspector-empty]")
-    ).not.toBeNull();
+    expect(getPanelRoot()?.querySelector("[data-devlens-inspector-empty]")).not.toBeNull();
 
     panel.uninstall();
   });
@@ -503,10 +471,9 @@ describe("createPanel filtering behavior (Navigation Context)", () => {
         ?.querySelector(`[data-devlens-event-id="${selectedId}"]`)
         ?.hasAttribute("data-selected")
     ).toBe(true);
-    expect(
-      getPanelRoot()?.querySelector("[data-devlens-inspector-title]")
-        ?.textContent
-    ).toBe("Runtime Selection");
+    expect(getPanelRoot()?.querySelector("[data-devlens-inspector-title]")?.textContent).toBe(
+      "Runtime Selection"
+    );
 
     panel.uninstall();
   });
@@ -521,30 +488,23 @@ describe("createPanel filtering behavior (Navigation Context)", () => {
 
     const selectedId = store.getAll()[0].id;
     clickRow(selectedId);
-    expect(
-      getPanelRoot()?.querySelector("[data-devlens-inspector-title]")
-        ?.textContent
-    ).toBe("Console Selection");
+    expect(getPanelRoot()?.querySelector("[data-devlens-inspector-title]")?.textContent).toBe(
+      "Console Selection"
+    );
 
     // The active filter now excludes the console category entirely —
     // unlike scrolling beyond MAX_RENDERED_EVENTS, the event is no
     // longer part of the Navigation Context at all.
     panel.setFilters({ categories: ["runtime"], severities: [] });
 
-    expect(
-      getPanelRoot()?.querySelector("[data-devlens-inspector-empty]")
-    ).not.toBeNull();
-    expect(
-      getPanelRoot()?.querySelector(`[data-devlens-event-id="${selectedId}"]`)
-    ).toBeNull();
+    expect(getPanelRoot()?.querySelector("[data-devlens-inspector-empty]")).not.toBeNull();
+    expect(getPanelRoot()?.querySelector(`[data-devlens-event-id="${selectedId}"]`)).toBeNull();
 
     panel.uninstall();
   });
 
   it("continues respecting the active filter when the Store receives a new event", () => {
-    const store = createFakeStore([
-      makeEvent({ title: "Existing Runtime", category: "runtime" }),
-    ]);
+    const store = createFakeStore([makeEvent({ title: "Existing Runtime", category: "runtime" })]);
     const panel = createPanel(store);
     panel.install();
 
@@ -570,14 +530,10 @@ describe("createPanel filtering behavior (Navigation Context)", () => {
     panel.install();
 
     panel.setFilters({ categories: ["runtime"], severities: [] });
-    expect(
-      getPanelRoot()?.querySelectorAll("[data-devlens-event-row]")
-    ).toHaveLength(1);
+    expect(getPanelRoot()?.querySelectorAll("[data-devlens-event-row]")).toHaveLength(1);
 
     panel.setFilters({ categories: [], severities: [] });
-    expect(
-      getPanelRoot()?.querySelectorAll("[data-devlens-event-row]")
-    ).toHaveLength(2);
+    expect(getPanelRoot()?.querySelectorAll("[data-devlens-event-row]")).toHaveLength(2);
 
     panel.uninstall();
   });
@@ -608,12 +564,8 @@ describe("createPanel toolbar integration", () => {
     panel.install();
 
     const children = Array.from(getPanelRoot()?.children ?? []);
-    const toolbarIndex = children.findIndex((el) =>
-      el.hasAttribute("data-devlens-toolbar")
-    );
-    const listIndex = children.findIndex((el) =>
-      el.hasAttribute("data-devlens-event-list")
-    );
+    const toolbarIndex = children.findIndex((el) => el.hasAttribute("data-devlens-toolbar"));
+    const listIndex = children.findIndex((el) => el.hasAttribute("data-devlens-event-list"));
 
     expect(toolbarIndex).toBeGreaterThanOrEqual(0);
     expect(listIndex).toBeGreaterThan(toolbarIndex);
@@ -696,9 +648,7 @@ describe("createPanel search behavior (Navigation Context)", () => {
 
     panel.setSearchQuery("");
 
-    expect(
-      getPanelRoot()?.querySelectorAll("[data-devlens-event-row]")
-    ).toHaveLength(2);
+    expect(getPanelRoot()?.querySelectorAll("[data-devlens-event-row]")).toHaveLength(2);
 
     panel.uninstall();
   });
@@ -727,9 +677,7 @@ describe("createPanel search behavior (Navigation Context)", () => {
 
     panel.setSearchQuery("  NETWORK  ");
 
-    expect(
-      getPanelRoot()?.querySelectorAll("[data-devlens-event-row]")
-    ).toHaveLength(1);
+    expect(getPanelRoot()?.querySelectorAll("[data-devlens-event-row]")).toHaveLength(1);
 
     panel.uninstall();
   });
@@ -737,9 +685,7 @@ describe("createPanel search behavior (Navigation Context)", () => {
   it("applies search before windowing to MAX_RENDERED_EVENTS, not within an already-windowed slice", () => {
     const events = [
       makeEvent({ title: "The Unique Match" }),
-      ...Array.from({ length: 400 }, (_, i) =>
-        makeEvent({ title: `Filler ${i}` })
-      ),
+      ...Array.from({ length: 400 }, (_, i) => makeEvent({ title: `Filler ${i}` })),
     ];
     const store = createFakeStore(events);
     const panel = createPanel(store);
@@ -765,16 +711,13 @@ describe("createPanel search behavior (Navigation Context)", () => {
 
     const selectedId = store.getAll()[0].id;
     clickRow(selectedId);
-    expect(
-      getPanelRoot()?.querySelector("[data-devlens-inspector-title]")
-        ?.textContent
-    ).toBe("Selected Event");
+    expect(getPanelRoot()?.querySelector("[data-devlens-inspector-title]")?.textContent).toBe(
+      "Selected Event"
+    );
 
     panel.setSearchQuery("other");
 
-    expect(
-      getPanelRoot()?.querySelector("[data-devlens-inspector-empty]")
-    ).not.toBeNull();
+    expect(getPanelRoot()?.querySelector("[data-devlens-inspector-empty]")).not.toBeNull();
 
     panel.uninstall();
   });
@@ -792,10 +735,9 @@ describe("createPanel search behavior (Navigation Context)", () => {
 
     panel.setSearchQuery("failure");
 
-    expect(
-      getPanelRoot()?.querySelector("[data-devlens-inspector-title]")
-        ?.textContent
-    ).toBe("Runtime Failure");
+    expect(getPanelRoot()?.querySelector("[data-devlens-inspector-title]")?.textContent).toBe(
+      "Runtime Failure"
+    );
 
     panel.uninstall();
   });
@@ -830,9 +772,7 @@ describe("createPanel search behavior (Navigation Context)", () => {
 
     panel.install();
 
-    expect(
-      getPanelRoot()?.querySelectorAll("[data-devlens-event-row]")
-    ).toHaveLength(2);
+    expect(getPanelRoot()?.querySelectorAll("[data-devlens-event-row]")).toHaveLength(2);
 
     panel.uninstall();
   });
@@ -887,9 +827,7 @@ describe("createPanel search box integration", () => {
   });
 
   function searchInput(): HTMLInputElement {
-    const el = getPanelRoot()?.querySelector<HTMLInputElement>(
-      "[data-devlens-search-input]"
-    );
+    const el = getPanelRoot()?.querySelector<HTMLInputElement>("[data-devlens-search-input]");
     if (!el) throw new Error("search input not found");
     return el;
   }
@@ -906,15 +844,9 @@ describe("createPanel search box integration", () => {
     panel.install();
 
     const children = Array.from(getPanelRoot()?.children ?? []);
-    const toolbarIndex = children.findIndex((el) =>
-      el.hasAttribute("data-devlens-toolbar")
-    );
-    const searchIndex = children.findIndex((el) =>
-      el.hasAttribute("data-devlens-search")
-    );
-    const listIndex = children.findIndex((el) =>
-      el.hasAttribute("data-devlens-event-list")
-    );
+    const toolbarIndex = children.findIndex((el) => el.hasAttribute("data-devlens-toolbar"));
+    const searchIndex = children.findIndex((el) => el.hasAttribute("data-devlens-search"));
+    const listIndex = children.findIndex((el) => el.hasAttribute("data-devlens-event-list"));
 
     expect(toolbarIndex).toBeGreaterThanOrEqual(0);
     expect(searchIndex).toBeGreaterThan(toolbarIndex);
@@ -971,9 +903,7 @@ describe("createPanel search box integration", () => {
     panel.install();
 
     expect(searchInput().value).toBe("");
-    expect(
-      getPanelRoot()?.querySelectorAll("[data-devlens-event-row]")
-    ).toHaveLength(1);
+    expect(getPanelRoot()?.querySelectorAll("[data-devlens-event-row]")).toHaveLength(1);
 
     panel.uninstall();
   });
@@ -985,9 +915,7 @@ describe("createPanel search presentation", () => {
   });
 
   function searchInput(): HTMLInputElement {
-    const el = getPanelRoot()?.querySelector<HTMLInputElement>(
-      "[data-devlens-search-input]"
-    );
+    const el = getPanelRoot()?.querySelector<HTMLInputElement>("[data-devlens-search-input]");
     if (!el) throw new Error("search input not found");
     return el;
   }
@@ -1005,9 +933,7 @@ describe("createPanel search presentation", () => {
 
     typeIntoSearch("timeout");
 
-    expect(
-      getPanelRoot()?.querySelector("[data-devlens-match]")?.textContent
-    ).toBe("Timeout");
+    expect(getPanelRoot()?.querySelector("[data-devlens-match]")?.textContent).toBe("Timeout");
 
     panel.uninstall();
   });
@@ -1021,9 +947,8 @@ describe("createPanel search presentation", () => {
     clickRow(store.getAll()[0].id);
 
     expect(
-      getPanelRoot()?.querySelector(
-        "[data-devlens-inspector-title] [data-devlens-match]"
-      )?.textContent
+      getPanelRoot()?.querySelector("[data-devlens-inspector-title] [data-devlens-match]")
+        ?.textContent
     ).toBe("Timeout");
 
     panel.uninstall();
@@ -1034,9 +959,7 @@ describe("createPanel search presentation", () => {
     const panel = createPanel(store);
     panel.install();
 
-    expect(
-      getPanelRoot()?.querySelector('[data-devlens-event-list-empty="store"]')
-    ).not.toBeNull();
+    expect(getPanelRoot()?.querySelector('[data-devlens-event-list-empty="store"]')).not.toBeNull();
 
     panel.uninstall();
   });
@@ -1049,9 +972,7 @@ describe("createPanel search presentation", () => {
     typeIntoSearch("nonexistent");
 
     expect(
-      getPanelRoot()?.querySelector(
-        '[data-devlens-event-list-empty="filtered"]'
-      )
+      getPanelRoot()?.querySelector('[data-devlens-event-list-empty="filtered"]')
     ).not.toBeNull();
 
     panel.uninstall();
@@ -1065,20 +986,15 @@ describe("createPanel search presentation", () => {
     const panel = createPanel(store);
     panel.install();
 
-    expect(
-      getPanelRoot()?.querySelector("[data-devlens-event-list-count]")
-    ).toBeNull();
+    expect(getPanelRoot()?.querySelector("[data-devlens-event-list-count]")).toBeNull();
 
     typeIntoSearch("timeout");
-    expect(
-      getPanelRoot()?.querySelector("[data-devlens-event-list-count]")
-        ?.textContent
-    ).toBe("1 of 2");
+    expect(getPanelRoot()?.querySelector("[data-devlens-event-list-count]")?.textContent).toBe(
+      "1 of 2"
+    );
 
     typeIntoSearch("");
-    expect(
-      getPanelRoot()?.querySelector("[data-devlens-event-list-count]")
-    ).toBeNull();
+    expect(getPanelRoot()?.querySelector("[data-devlens-event-list-count]")).toBeNull();
 
     panel.uninstall();
   });
@@ -1089,22 +1005,17 @@ describe("createPanel keyboard navigation", () => {
   });
 
   function eventListElement(): HTMLElement {
-    const el = getPanelRoot()?.querySelector<HTMLElement>(
-      "[data-devlens-event-list]"
-    );
+    const el = getPanelRoot()?.querySelector<HTMLElement>("[data-devlens-event-list]");
     if (!el) throw new Error("event list not found");
     return el;
   }
 
   function pressKey(key: string, target: HTMLElement): void {
-    target.dispatchEvent(
-      new KeyboardEvent("keydown", { key, bubbles: true, composed: true })
-    );
+    target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, composed: true }));
   }
 
   function selectedTitle(): string | null | undefined {
-    return getPanelRoot()?.querySelector("[data-devlens-inspector-title]")
-      ?.textContent;
+    return getPanelRoot()?.querySelector("[data-devlens-inspector-title]")?.textContent;
   }
 
   it("does nothing when the event list does not have focus", () => {
@@ -1115,18 +1026,13 @@ describe("createPanel keyboard navigation", () => {
     // No .focus() call — the list never receives focus.
     pressKey("ArrowDown", eventListElement());
 
-    expect(
-      getPanelRoot()?.querySelector("[data-devlens-inspector-empty]")
-    ).not.toBeNull();
+    expect(getPanelRoot()?.querySelector("[data-devlens-inspector-empty]")).not.toBeNull();
 
     panel.uninstall();
   });
 
   it("selects the first row on ArrowDown with the list focused and nothing selected", () => {
-    const store = createFakeStore([
-      makeEvent({ title: "First" }),
-      makeEvent({ title: "Second" }),
-    ]);
+    const store = createFakeStore([makeEvent({ title: "First" }), makeEvent({ title: "Second" })]);
     const panel = createPanel(store);
     panel.install();
 
@@ -1140,10 +1046,7 @@ describe("createPanel keyboard navigation", () => {
   });
 
   it("also selects the first row on ArrowUp with the list focused and nothing selected — not the last", () => {
-    const store = createFakeStore([
-      makeEvent({ title: "First" }),
-      makeEvent({ title: "Second" }),
-    ]);
+    const store = createFakeStore([makeEvent({ title: "First" }), makeEvent({ title: "Second" })]);
     const panel = createPanel(store);
     panel.install();
 
@@ -1195,10 +1098,7 @@ describe("createPanel keyboard navigation", () => {
   });
 
   it("stops on the last row — ArrowDown past the end does not wrap to the first", () => {
-    const store = createFakeStore([
-      makeEvent({ title: "First" }),
-      makeEvent({ title: "Second" }),
-    ]);
+    const store = createFakeStore([makeEvent({ title: "First" }), makeEvent({ title: "Second" })]);
     const panel = createPanel(store);
     panel.install();
 
@@ -1213,10 +1113,7 @@ describe("createPanel keyboard navigation", () => {
   });
 
   it("stops on the first row — ArrowUp past the start does not wrap to the last", () => {
-    const store = createFakeStore([
-      makeEvent({ title: "First" }),
-      makeEvent({ title: "Second" }),
-    ]);
+    const store = createFakeStore([makeEvent({ title: "First" }), makeEvent({ title: "Second" })]);
     const panel = createPanel(store);
     panel.install();
 
@@ -1269,10 +1166,7 @@ describe("createPanel keyboard navigation", () => {
   });
 
   it("stops navigating once focus moves to the search box", () => {
-    const store = createFakeStore([
-      makeEvent({ title: "First" }),
-      makeEvent({ title: "Second" }),
-    ]);
+    const store = createFakeStore([makeEvent({ title: "First" }), makeEvent({ title: "Second" })]);
     const panel = createPanel(store);
     panel.install();
 
@@ -1301,9 +1195,7 @@ describe("createPanel keyboard navigation", () => {
     list.focus();
 
     expect(() => pressKey("ArrowDown", list)).not.toThrow();
-    expect(
-      getPanelRoot()?.querySelector("[data-devlens-inspector-empty]")
-    ).not.toBeNull();
+    expect(getPanelRoot()?.querySelector("[data-devlens-inspector-empty]")).not.toBeNull();
 
     panel.uninstall();
   });
@@ -1344,9 +1236,7 @@ describe("createPanel keyboard navigation", () => {
 
     panel.setFilters({ categories: ["console"], severities: [] });
 
-    expect(
-      getPanelRoot()?.querySelector("[data-devlens-inspector-empty]")
-    ).not.toBeNull();
+    expect(getPanelRoot()?.querySelector("[data-devlens-inspector-empty]")).not.toBeNull();
 
     panel.uninstall();
   });
@@ -1460,10 +1350,9 @@ describe("createPanel pause/resume/clear/export", () => {
       panel.pause();
       clickRow(store.getAll()[0].id);
 
-      expect(
-        getPanelRoot()?.querySelector("[data-devlens-inspector-title]")
-          ?.textContent
-      ).toBe("Clickable Event");
+      expect(getPanelRoot()?.querySelector("[data-devlens-inspector-title]")?.textContent).toBe(
+        "Clickable Event"
+      );
 
       panel.uninstall();
     });
@@ -1482,11 +1371,7 @@ describe("createPanel pause/resume/clear/export", () => {
 
       panel.resume();
 
-      expect(renderedTitles()).toEqual([
-        "Before Pause",
-        "During Pause One",
-        "During Pause Two",
-      ]);
+      expect(renderedTitles()).toEqual(["Before Pause", "During Pause One", "During Pause Two"]);
 
       panel.uninstall();
     });
@@ -1548,16 +1433,13 @@ describe("createPanel pause/resume/clear/export", () => {
       panel.install();
 
       clickRow(store.getAll()[0].id);
-      expect(
-        getPanelRoot()?.querySelector("[data-devlens-inspector-title]")
-          ?.textContent
-      ).toBe("Selected Event");
+      expect(getPanelRoot()?.querySelector("[data-devlens-inspector-title]")?.textContent).toBe(
+        "Selected Event"
+      );
 
       panel.clear();
 
-      expect(
-        getPanelRoot()?.querySelector("[data-devlens-inspector-empty]")
-      ).not.toBeNull();
+      expect(getPanelRoot()?.querySelector("[data-devlens-inspector-empty]")).not.toBeNull();
 
       panel.uninstall();
     });
@@ -1668,9 +1550,7 @@ describe("createPanel session controls, mounted end-to-end", () => {
 
   function clickPauseButton(): void {
     getPanelRoot()
-      ?.querySelector<HTMLButtonElement>(
-        "[data-devlens-session-pause-button]"
-      )
+      ?.querySelector<HTMLButtonElement>("[data-devlens-session-pause-button]")
       ?.click();
   }
 
@@ -1684,17 +1564,13 @@ describe("createPanel session controls, mounted end-to-end", () => {
 
   function clickClearButton(): void {
     getPanelRoot()
-      ?.querySelector<HTMLButtonElement>(
-        "[data-devlens-session-clear-button]"
-      )
+      ?.querySelector<HTMLButtonElement>("[data-devlens-session-clear-button]")
       ?.click();
   }
 
   function clickExportButton(): void {
     getPanelRoot()
-      ?.querySelector<HTMLButtonElement>(
-        "[data-devlens-session-export-button]"
-      )
+      ?.querySelector<HTMLButtonElement>("[data-devlens-session-export-button]")
       ?.click();
   }
 
@@ -1702,9 +1578,7 @@ describe("createPanel session controls, mounted end-to-end", () => {
     const panel = createPanel(createFakeStore());
     panel.install();
 
-    expect(
-      getPanelRoot()?.querySelector("[data-devlens-session-controls]")
-    ).not.toBeNull();
+    expect(getPanelRoot()?.querySelector("[data-devlens-session-controls]")).not.toBeNull();
 
     panel.uninstall();
   });
@@ -1760,9 +1634,7 @@ describe("createPanel session controls, mounted end-to-end", () => {
       globalThis.Blob = StubBlob;
       URL.createObjectURL = vi.fn(() => "blob:mock-url");
       URL.revokeObjectURL = vi.fn();
-      anchorClickSpy = vi
-        .spyOn(HTMLAnchorElement.prototype, "click")
-        .mockImplementation(() => {});
+      anchorClickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
     });
 
     afterEach(() => {
@@ -1772,10 +1644,7 @@ describe("createPanel session controls, mounted end-to-end", () => {
     });
 
     it("downloads exactly what panel.exportEvents() would return", () => {
-      const store = createFakeStore([
-        makeEvent({ title: "One" }),
-        makeEvent({ title: "Two" }),
-      ]);
+      const store = createFakeStore([makeEvent({ title: "One" }), makeEvent({ title: "Two" })]);
       const panel = createPanel(store);
       panel.install();
 
@@ -1828,9 +1697,7 @@ describe("createPanel session controls, mounted end-to-end", () => {
     }
 
     function getImportStatus(): HTMLElement {
-      const el = getPanelRoot()?.querySelector<HTMLElement>(
-        "[data-devlens-session-import-status]"
-      );
+      const el = getPanelRoot()?.querySelector<HTMLElement>("[data-devlens-session-import-status]");
       if (!el) throw new Error("import status region not found");
       return el;
     }
@@ -1848,9 +1715,7 @@ describe("createPanel session controls, mounted end-to-end", () => {
       const panel = createPanel(createFakeStore());
       panel.install();
 
-      expect(
-        getPanelRoot()?.querySelector("[data-devlens-session-import-button]")
-      ).not.toBeNull();
+      expect(getPanelRoot()?.querySelector("[data-devlens-session-import-button]")).not.toBeNull();
       // Confirms the browser-facing wiring (accept filter) survived
       // composition into the mounted Panel — finer-grained input
       // details beyond this belong to session-controls.test.ts.
@@ -1862,18 +1727,14 @@ describe("createPanel session controls, mounted end-to-end", () => {
     describe("while running (not paused)", () => {
       it("restores events into the Store and rendered list while running", async () => {
         const store = createFakeStore();
-        const exportedJson = serializeEvents([
-          makeEvent({ title: "Restored Event" }),
-        ]);
+        const exportedJson = serializeEvents([makeEvent({ title: "Restored Event" })]);
         const panel = createPanel(store);
         panel.install();
 
         expect(panel.isPaused()).toBe(false);
         selectFile(exportedJson);
 
-        await vi.waitFor(() =>
-          expect(renderedTitles()).toEqual(["Restored Event"])
-        );
+        await vi.waitFor(() => expect(renderedTitles()).toEqual(["Restored Event"]));
         expect(store.getAll()).toHaveLength(1);
 
         panel.uninstall();
@@ -1883,9 +1744,7 @@ describe("createPanel session controls, mounted end-to-end", () => {
     describe("while paused", () => {
       it("restores events into the Store and still refreshes the rendered list immediately, despite pause suppressing automatic refresh", async () => {
         const store = createFakeStore();
-        const exportedJson = serializeEvents([
-          makeEvent({ title: "Restored While Paused" }),
-        ]);
+        const exportedJson = serializeEvents([makeEvent({ title: "Restored While Paused" })]);
         const panel = createPanel(store);
         panel.install();
 
@@ -1896,9 +1755,7 @@ describe("createPanel session controls, mounted end-to-end", () => {
         // (which handleStoreUpdate ignores while paused), the render
         // would never happen — this asserts the explicit
         // updateEventList() call that pause requires actually fires.
-        await vi.waitFor(() =>
-          expect(renderedTitles()).toEqual(["Restored While Paused"])
-        );
+        await vi.waitFor(() => expect(renderedTitles()).toEqual(["Restored While Paused"]));
         expect(store.getAll()).toHaveLength(1);
         expect(panel.isPaused()).toBe(true); // import doesn't resume
 
@@ -1908,17 +1765,13 @@ describe("createPanel session controls, mounted end-to-end", () => {
 
     it("leaves an existing, non-empty Store untouched and reports store-not-empty", async () => {
       const store = createFakeStore([makeEvent({ title: "Existing Event" })]);
-      const exportedJson = serializeEvents([
-        makeEvent({ title: "Would-Be Restored Event" }),
-      ]);
+      const exportedJson = serializeEvents([makeEvent({ title: "Would-Be Restored Event" })]);
       const panel = createPanel(store);
       panel.install();
 
       selectFile(exportedJson);
 
-      await vi.waitFor(() =>
-        expect(getImportStatus().textContent).toMatch(/clear/i)
-      );
+      await vi.waitFor(() => expect(getImportStatus().textContent).toMatch(/clear/i));
       expect(store.getAll().map((e) => e.title)).toEqual(["Existing Event"]);
       expect(renderedTitles()).toEqual(["Existing Event"]);
 
@@ -1932,9 +1785,7 @@ describe("createPanel session controls, mounted end-to-end", () => {
 
       selectFile("not valid json{{{");
 
-      await vi.waitFor(() =>
-        expect(getImportStatus().textContent).not.toBe("")
-      );
+      await vi.waitFor(() => expect(getImportStatus().textContent).not.toBe(""));
       expect(store.getAll()).toEqual([]);
       expect(renderedTitles()).toEqual([]);
 
@@ -1953,9 +1804,7 @@ describe("createPanel session controls, mounted end-to-end", () => {
       });
       input.dispatchEvent(new Event("change"));
 
-      await vi.waitFor(() =>
-        expect(getImportStatus().textContent).toContain("Could not read")
-      );
+      await vi.waitFor(() => expect(getImportStatus().textContent).toContain("Could not read"));
       expect(store.getAll()).toEqual([]);
 
       panel.uninstall();
@@ -1991,9 +1840,7 @@ describe("createPanel session controls, mounted end-to-end", () => {
 
       selectFile(exportedJson);
 
-      await vi.waitFor(() =>
-        expect(renderedTitles()).toEqual(["Round Trip Event"])
-      );
+      await vi.waitFor(() => expect(renderedTitles()).toEqual(["Round Trip Event"]));
       expect(freshStore.getAll()[0].id).toBe(sourceStore.getAll()[0].id);
       expect(freshStore.getAll()[0].message).toBe("hello");
 

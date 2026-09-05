@@ -49,10 +49,8 @@ export function applyFilters(
   }
 
   return events.filter((event) => {
-    const matchesCategory =
-      !hasCategoryFilter || filters.categories.includes(event.category);
-    const matchesSeverity =
-      !hasSeverityFilter || filters.severities.includes(event.severity);
+    const matchesCategory = !hasCategoryFilter || filters.categories.includes(event.category);
+    const matchesSeverity = !hasSeverityFilter || filters.severities.includes(event.severity);
     return matchesCategory && matchesSeverity;
   });
 }

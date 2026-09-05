@@ -89,9 +89,7 @@ describe("applySearch", () => {
     it("does not match an event with no stack against a query only present in others' stacks", () => {
       const withStack = makeEvent({ stack: "at handler (a.js:1)" });
       const withoutStack = makeEvent({ stack: undefined });
-      expect(applySearch([withStack, withoutStack], "handler")).toEqual([
-        withStack,
-      ]);
+      expect(applySearch([withStack, withoutStack], "handler")).toEqual([withStack]);
     });
 
     it("matches against any individual tag", () => {
@@ -127,10 +125,7 @@ describe("applySearch", () => {
       const second = makeEvent({ title: "Unrelated Console Log", timestamp: 2 });
       const third = makeEvent({ title: "Match Two", timestamp: 3 });
 
-      expect(applySearch([first, second, third], "match")).toEqual([
-        first,
-        third,
-      ]);
+      expect(applySearch([first, second, third], "match")).toEqual([first, third]);
     });
 
     it("does not mutate the input events array", () => {

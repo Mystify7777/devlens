@@ -16,13 +16,13 @@ export function createConsolePlugin(bus: EventBus): Plugin {
 
       for (const method of METHODS) {
         const original = console[method];
-originals[method] = original;
-console[method] = createInterceptor({
-  method,
-  bus,
-  original,
-  state,
-});
+        originals[method] = original;
+        console[method] = createInterceptor({
+          method,
+          bus,
+          original,
+          state,
+        });
       }
       installed = true;
     },

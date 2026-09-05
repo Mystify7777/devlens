@@ -36,9 +36,7 @@ export interface XhrSettlement {
  * visible in both files for that decision to be made deliberately,
  * not preemptively.
  */
-export function classifyXhrOutcome(
-  settlement: XhrSettlement
-): OutcomeClassification {
+export function classifyXhrOutcome(settlement: XhrSettlement): OutcomeClassification {
   if (settlement.event === "abort") {
     return { outcome: "aborted", severity: "info" };
   }

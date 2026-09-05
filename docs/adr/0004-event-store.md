@@ -31,12 +31,12 @@ and stays live for future events through the same subscription.
   bus's replay buffer or history. The two are independent logs that
   happen to be fed by the same source.
   - The Store no longer takes an `EventBus` in its constructor. Originally
-  it self-subscribed to a bus on creation, which coupled storage to one
-  specific event source. Now `createEventStore()` takes only
-  `EventStoreOptions`, and wiring to a bus is a separate, explicit step
-  via `connectStoreToBus(bus, store, options)` (`store-bus-connector.ts`).
-  This means a future source — a WebSocket stream, an imported session
-  file — can feed the exact same Store without the Store changing at all.
+    it self-subscribed to a bus on creation, which coupled storage to one
+    specific event source. Now `createEventStore()` takes only
+    `EventStoreOptions`, and wiring to a bus is a separate, explicit step
+    via `connectStoreToBus(bus, store, options)` (`store-bus-connector.ts`).
+    This means a future source — a WebSocket stream, an imported session
+    file — can feed the exact same Store without the Store changing at all.
 - `find()` renamed to `filter()`. "find" carries a strong single-result
   connotation in JS (`Array.prototype.find`); `filter()` matches actual
   behavior (returns all matches) without fighting developer intuition.

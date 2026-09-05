@@ -47,10 +47,7 @@ function describeFirstArg(arg: unknown): string {
  * an Error instance in a future revision — deferred for v1 since the
  * common case (console.error(err) alone) already works correctly.
  */
-export function normalizeConsoleCall(
-  method: ConsoleMethod,
-  args: unknown[]
-): DevLensEventInput {
+export function normalizeConsoleCall(method: ConsoleMethod, args: unknown[]): DevLensEventInput {
   const [first] = args;
   const message = args.length === 0 ? "" : describeFirstArg(first);
   const stack = first instanceof Error ? first.stack : undefined;

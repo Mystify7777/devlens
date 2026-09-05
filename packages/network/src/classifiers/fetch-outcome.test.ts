@@ -31,16 +31,13 @@ describe("classifyFetchOutcome", () => {
   });
 
   describe("5xx — http-error/error", () => {
-    it.each([500, 502, 503, 599])(
-      "status %i -> http-error/error",
-      (status) => {
-        const response = new Response(null, { status });
-        expect(fulfilled(response)).toEqual({
-          outcome: "http-error",
-          severity: "error",
-        });
-      }
-    );
+    it.each([500, 502, 503, 599])("status %i -> http-error/error", (status) => {
+      const response = new Response(null, { status });
+      expect(fulfilled(response)).toEqual({
+        outcome: "http-error",
+        severity: "error",
+      });
+    });
   });
 
   describe("opaque responses", () => {

@@ -61,9 +61,7 @@ const pendingDescriptors = new WeakMap<XMLHttpRequest, XhrRequestDescriptor>();
  * `uninstall()` shape every other capture mechanism in this project
  * uses.
  */
-export function installXhrInterceptor(
-  onSettle?: (info: XhrSettleInfo) => void
-): () => void {
+export function installXhrInterceptor(onSettle?: (info: XhrSettleInfo) => void): () => void {
   const originalOpen = XMLHttpRequest.prototype.open;
   const originalSend = XMLHttpRequest.prototype.send;
   // Invoked via these plainly-typed aliases only — TypeScript's DOM

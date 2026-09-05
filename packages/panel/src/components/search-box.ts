@@ -15,9 +15,7 @@ export interface SearchBox {
   readonly element: HTMLElement;
 }
 
-export function createSearchBox(
-  onQueryChange: (query: string) => void
-): SearchBox {
+export function createSearchBox(onQueryChange: (query: string) => void): SearchBox {
   const element = document.createElement("div");
   element.setAttribute("data-devlens-search", "");
 

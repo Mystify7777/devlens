@@ -103,10 +103,7 @@ describe("createNetworkPlugin fetch interception (Step 3A)", () => {
 
     await window.fetch("https://api.example.com/users", { method: "POST" });
 
-    expect(fakeOriginal).toHaveBeenCalledWith(
-      "https://api.example.com/users",
-      { method: "POST" }
-    );
+    expect(fakeOriginal).toHaveBeenCalledWith("https://api.example.com/users", { method: "POST" });
   });
 
   it("restores the exact original fetch reference on uninstall()", () => {
@@ -152,7 +149,9 @@ describe("createNetworkPlugin fetch interception (Step 3A)", () => {
 // on their own.
 describe("createNetworkPlugin end-to-end fetch reporting (Step 3C)", () => {
   it("reports exactly one event for a fulfilled request", async () => {
-    window.fetch = vi.fn(async () => new Response(null, { status: 200 })) as unknown as typeof fetch;
+    window.fetch = vi.fn(
+      async () => new Response(null, { status: 200 })
+    ) as unknown as typeof fetch;
 
     const bus = createEventBus();
     const network = createNetworkPlugin(bus);
@@ -207,7 +206,9 @@ describe("createNetworkPlugin end-to-end fetch reporting (Step 3C)", () => {
   });
 
   it("stops reporting after uninstall()", async () => {
-    window.fetch = vi.fn(async () => new Response(null, { status: 200 })) as unknown as typeof fetch;
+    window.fetch = vi.fn(
+      async () => new Response(null, { status: 200 })
+    ) as unknown as typeof fetch;
 
     const bus = createEventBus();
     const network = createNetworkPlugin(bus);
@@ -238,18 +239,14 @@ describe("createNetworkPlugin end-to-end fetch reporting (Step 3C)", () => {
     }
 
     it("fulfilled 200 -> success/info", async () => {
-      const event = await captureOneEvent(
-        async () => new Response(null, { status: 200 })
-      );
+      const event = await captureOneEvent(async () => new Response(null, { status: 200 }));
       expect(event.category).toBe("network");
       expect(event.severity).toBe("info");
       expect(event.metadata).toMatchObject({ outcome: "success", status: 200 });
     });
 
     it("fulfilled 404 -> http-error/warn", async () => {
-      const event = await captureOneEvent(
-        async () => new Response(null, { status: 404 })
-      );
+      const event = await captureOneEvent(async () => new Response(null, { status: 404 }));
       expect(event.severity).toBe("warn");
       expect(event.metadata).toMatchObject({
         outcome: "http-error",
@@ -258,9 +255,7 @@ describe("createNetworkPlugin end-to-end fetch reporting (Step 3C)", () => {
     });
 
     it("fulfilled 500 -> http-error/error", async () => {
-      const event = await captureOneEvent(
-        async () => new Response(null, { status: 500 })
-      );
+      const event = await captureOneEvent(async () => new Response(null, { status: 500 }));
       expect(event.severity).toBe("error");
       expect(event.metadata).toMatchObject({
         outcome: "http-error",
@@ -296,9 +291,7 @@ describe("createNetworkPlugin end-to-end fetch reporting (Step 3C)", () => {
     });
 
     it("rejected with an arbitrary error -> network-error/error", async () => {
-      const event = await captureOneEvent(() =>
-        Promise.reject(new TypeError("Failed to fetch"))
-      );
+      const event = await captureOneEvent(() => Promise.reject(new TypeError("Failed to fetch")));
       expect(event.severity).toBe("error");
       expect(event.metadata).toMatchObject({
         outcome: "network-error",
@@ -599,8 +592,10 @@ describe("createNetworkPlugin end-to-end XHR reporting (Step 4B)", () => {
 // smallest possible test proving the seam works, not a duplicate of
 // the classification/lifecycle coverage above.
 describe("createNetworkPlugin composed with EventStore (v0.5.2)", () => {
-  it("a captured Fetch request reaches a connected EventStore, tagged with category \"network\"", async () => {
-    window.fetch = vi.fn(async () => new Response(null, { status: 200 })) as unknown as typeof fetch;
+  it('a captured Fetch request reaches a connected EventStore, tagged with category "network"', async () => {
+    window.fetch = vi.fn(
+      async () => new Response(null, { status: 200 })
+    ) as unknown as typeof fetch;
 
     const bus = createEventBus();
     const store = createEventStore();
@@ -639,9 +634,11 @@ describe("createNetworkPlugin composed with EventStore (v0.5.2)", () => {
 // @devlens/core alongside the package under test). This test verifies
 // the composition precisely as it actually needs to be verified,
 // without introducing that edge.
-describe("Playground-style bus.subscribe(\"*\") → console.table() composition (v0.5.2)", () => {
+describe('Playground-style bus.subscribe("*") → console.table() composition (v0.5.2)', () => {
   it("a Network-originated event reaches a wildcard subscriber and is printed with console.table()", async () => {
-    window.fetch = vi.fn(async () => new Response(null, { status: 200 })) as unknown as typeof fetch;
+    window.fetch = vi.fn(
+      async () => new Response(null, { status: 200 })
+    ) as unknown as typeof fetch;
 
     const realTable = console.table;
     const tableSpy = vi.fn();

@@ -116,10 +116,7 @@ export function createPanel(store: EventStore): PanelController {
     // matching row); cleared if the Navigation Context no longer
     // contains it at all, e.g. because an active filter or search
     // query now excludes it.
-    if (
-      selectedEvent &&
-      !navigationContext.some((event) => event.id === selectedEvent!.id)
-    ) {
+    if (selectedEvent && !navigationContext.some((event) => event.id === selectedEvent!.id)) {
       selectEvent(null);
     }
 
@@ -279,11 +276,7 @@ export function createPanel(store: EventStore): PanelController {
         isPaused: getIsPaused,
         onImport: importFromSession,
       });
-      overlay.shadowRoot.append(
-        toolbar.element,
-        searchBox.element,
-        sessionControls.element
-      );
+      overlay.shadowRoot.append(toolbar.element, searchBox.element, sessionControls.element);
 
       renderer = createRenderer(overlay.shadowRoot);
 
@@ -304,8 +297,7 @@ export function createPanel(store: EventStore): PanelController {
         const eventId = row.getAttribute("data-devlens-event-id");
         if (!eventId) return;
 
-        const clickedEvent =
-          store.getAll().find((e) => e.id === eventId) ?? null;
+        const clickedEvent = store.getAll().find((e) => e.id === eventId) ?? null;
         selectEvent(clickedEvent);
       });
 

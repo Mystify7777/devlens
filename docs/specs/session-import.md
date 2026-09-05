@@ -122,10 +122,7 @@ raw JSON string
 ```ts
 // packages/panel/src/import.ts
 
-export function importSession(
-  input: string,
-  store: EventStore
-): ImportResult;
+export function importSession(input: string, store: EventStore): ImportResult;
 ```
 
 Takes a raw JSON string (matching what `serializeEvents()` produces
@@ -146,22 +143,22 @@ to be public, following the same pattern `serialize.ts`'s
 ## Validation contract
 
 Applied to the full parsed array before any Store mutation. Each
-condition below causes rejection of the *entire* import (Decision 5)
+condition below causes rejection of the _entire_ import (Decision 5)
 — none are per-event partial failures.
 
-| # | Condition | Source |
-|---|---|---|
-| 1 | Input is valid JSON | Import trust boundary |
-| 2 | Parsed top-level value is an array | Import trust boundary |
-| 3 | Every array element is a plain object | Import trust boundary |
-| 4 | Every event has all required `DevLensEvent` fields, correctly typed: `id: string`, `origin: string`, `category: string` (any string — see `EventCategory`'s openness, below), `severity` one of the six `EventSeverity` literals (see condition 5), `title: string`, `message: string`, `timestamp: number`; if present, `stack: string`, `tags: string[]` (array where every element is a `string`), `metadata: Record<string, unknown>` (a plain object — any value, not type-checked deeper than "is a plain object"), `context: Record<string, unknown>` (same) | ADR-0011 Decision 6 (shape) |
-| 5 | Every event's `severity` is one of the six valid `EventSeverity` values | Closed union — part of shape validation |
-| 6 | Every event's `version` is exactly `1` | ADR-0011 Decision 4 |
-| 7 | No event has fields beyond the known `DevLensEvent` shape | ADR-0011 Decision 6 |
-| 8 | No two events in the array share an `id` | ADR-0011 Decision 7 |
-| 9 | No event's `id` already exists in the target Store (defense-in-depth invariant — see note below the table; not independently reachable through the public `importSession()` contract while condition 10 holds) | ADR-0011 Decision 7 |
-| 10 | The target Store is currently empty (`store.getAll().length === 0`) | ADR-0011 Decision 8 |
-| 11 | The imported event count does not exceed the target Store's capacity (`events.length <= store.capacity`) | New — see below; not addressed by ADR-0011 |
+| #   | Condition                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Source                                     |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| 1   | Input is valid JSON                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Import trust boundary                      |
+| 2   | Parsed top-level value is an array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Import trust boundary                      |
+| 3   | Every array element is a plain object                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Import trust boundary                      |
+| 4   | Every event has all required `DevLensEvent` fields, correctly typed: `id: string`, `origin: string`, `category: string` (any string — see `EventCategory`'s openness, below), `severity` one of the six `EventSeverity` literals (see condition 5), `title: string`, `message: string`, `timestamp: number`; if present, `stack: string`, `tags: string[]` (array where every element is a `string`), `metadata: Record<string, unknown>` (a plain object — any value, not type-checked deeper than "is a plain object"), `context: Record<string, unknown>` (same) | ADR-0011 Decision 6 (shape)                |
+| 5   | Every event's `severity` is one of the six valid `EventSeverity` values                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Closed union — part of shape validation    |
+| 6   | Every event's `version` is exactly `1`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | ADR-0011 Decision 4                        |
+| 7   | No event has fields beyond the known `DevLensEvent` shape                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | ADR-0011 Decision 6                        |
+| 8   | No two events in the array share an `id`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | ADR-0011 Decision 7                        |
+| 9   | No event's `id` already exists in the target Store (defense-in-depth invariant — see note below the table; not independently reachable through the public `importSession()` contract while condition 10 holds)                                                                                                                                                                                                                                                                                                                                                      | ADR-0011 Decision 7                        |
+| 10  | The target Store is currently empty (`store.getAll().length === 0`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | ADR-0011 Decision 8                        |
+| 11  | The imported event count does not exceed the target Store's capacity (`events.length <= store.capacity`)                                                                                                                                                                                                                                                                                                                                                                                                                                                            | New — see below; not addressed by ADR-0011 |
 
 **Note on conditions 9 and 10:** these two conditions interact in a way
 worth stating explicitly, since together with the public `ImportError`
@@ -234,13 +231,13 @@ not assumed here.
    (condition 11) — are checked immediately after conditions 1–3,
    before any event-level validation begins**, in that order (empty
    check first, since it's the pre-existing rule; capacity check
-   second, since it's specific to *this* import's size). This is a
+   second, since it's specific to _this_ import's size). This is a
    deliberate, narrow exception to the general non-contractual-
    ordering rule below, made specifically so neither Store precondition
    can be masked by an event-level failure (e.g. `unsupported-version`)
    that happened to be checked first. Without this exception, "any
    order" for conditions 4–11 together would make it possible for a
-   non-empty (or oversized-relative-to-import) Store *and* a malformed
+   non-empty (or oversized-relative-to-import) Store _and_ a malformed
    event to both be present, with the reported `ImportError` depending
    on implementation-internal iteration order — exactly the kind of
    ambiguity a spec exists to close.
@@ -286,9 +283,7 @@ union.
 ## Failure contract
 
 ```ts
-export type ImportResult =
-  | { ok: true; importedCount: number }
-  | { ok: false; error: ImportError };
+export type ImportResult = { ok: true; importedCount: number } | { ok: false; error: ImportError };
 
 export type ImportError =
   | { code: "invalid-json"; message: string }
@@ -304,8 +299,8 @@ export type ImportError =
 
 Each `ImportError` variant carries enough structured detail
 (`eventIndex`, `field`, `id`, where applicable) for a future caller —
-console logging today, a UI surface later — to explain *what* failed
-and *where*, without needing to re-parse `message`. `message` itself
+console logging today, a UI surface later — to explain _what_ failed
+and _where_, without needing to re-parse `message`. `message` itself
 is a human-readable string for direct display/logging; the `code` and
 structured fields are what a caller should branch on programmatically.
 
@@ -324,8 +319,8 @@ violations into a combined report. This follows directly from
 collection, and this spec does not ask implementation to invent an
 aggregated form the type doesn't represent. Combined with the
 Principles section's "validation order is non-contractual": a caller
-can depend on *invalid input → `ok: false` → Store untouched*, but not
-on *which* field or event wins when multiple things are wrong with the
+can depend on _invalid input → `ok: false` → Store untouched_, but not
+on _which_ field or event wins when multiple things are wrong with the
 same import. If aggregated, multi-error reporting is ever wanted, it's
 a distinct future decision with its own result-shape implications, not
 something this contract already supports informally.
@@ -382,7 +377,7 @@ interface EventStore {
   check.** `addMany()` does not reject an oversized batch; it applies
   `RingBuffer`'s normal eviction behavior exactly as `add()` would if
   called repeatedly. Rejecting an import that would exceed capacity
-  (condition 11) is Import's responsibility, checked *before*
+  (condition 11) is Import's responsibility, checked _before_
   `addMany()` is ever called — `addMany()` itself remains a generic
   storage primitive with no awareness that "this batch came from an
   Import operation with a round-trip invariant to protect." Keeping

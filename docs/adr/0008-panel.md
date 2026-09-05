@@ -38,7 +38,7 @@ subscription. Idempotent, matching Runtime/Console.
 ## Isolation strategy: Shadow DOM
 
 The Panel host element uses `attachShadow({ mode: "open" })`. This is
-non-negotiable for v1: DevLens is meant to drop into *any* host
+non-negotiable for v1: DevLens is meant to drop into _any_ host
 application without CSS collisions in either direction — the host app's
 global stylesheet must not leak into the Panel, and the Panel's styles
 must not leak into the host app. A plain `<div>` appended to `body` with
@@ -76,7 +76,7 @@ enforced by `panel.ts`, not the renderer: `panel.ts` slices
 before ever calling `renderer.render(events)`. The renderer only knows
 how to draw whatever array it's handed — it has no opinion about how
 many events should exist, only how to display them. This keeps the
-renderer dumb by design: deciding *what* exists is a policy decision
+renderer dumb by design: deciding _what_ exists is a policy decision
 that belongs one level up, not baked into the drawing code.
 
 ## Overlay ownership
@@ -159,8 +159,8 @@ packages/panel/
 
 ADR-0009 ("Interactive Inspection") flagged that adding an inspector
 would be the concrete trigger for revisiting this ADR's original
-deferral: *"the renderer currently takes the whole ShadowRoot; it
-should eventually take a specific `eventListContainer` sub-element."*
+deferral: _"the renderer currently takes the whole ShadowRoot; it
+should eventually take a specific `eventListContainer` sub-element."_
 This is that revisit.
 
 **Decision:** `createRenderer(shadowRoot)` keeps taking the whole
@@ -186,7 +186,7 @@ This keeps the renderer mechanical, per this ADR's original intent —
 it still has no opinion about selection, clicks, or Panel state (those
 remain `panel.ts`'s job, per ADR-0009's Panel state model decision).
 Owning two named regions is a layout responsibility, not a policy one:
-the renderer decides *where* things render, never *whether* or *what*.
+the renderer decides _where_ things render, never _whether_ or _what_.
 
 **Non-goal, still deferred:** header/toolbar/footer regions. Only the
 event-list/inspector split exists now. If those are added later, this
@@ -212,19 +212,19 @@ directly, not by `createRenderer()`.** This is a deliberate asymmetry
 with the event-list/inspector split, not an inconsistency:
 
 - `renderer.ts`'s whole reason for existing is to stay mechanical — it
-  renders *state* into regions and has no opinion about clicks,
+  renders _state_ into regions and has no opinion about clicks,
   selection, or Panel lifecycle (this ADR's original intent;
   reaffirmed by the Session 4 amendment above). The event list and
   inspector are both pure projections of state `panel.ts` hands them.
 - The toolbar is not a projection of state — it is itself a source of
-  state changes (a checkbox toggling *produces* a new `FilterState`).
+  state changes (a checkbox toggling _produces_ a new `FilterState`).
   Giving the renderer a region whose entire purpose is emitting
   events back out would reintroduce exactly the coupling the Session 4
   amendment was written to avoid.
 
 So `panel.ts` creates the toolbar the same way it creates the overlay
 — `createToolbar(onFiltersChange)` — and appends `toolbar.element` to
-`overlay.shadowRoot` *before* calling `createRenderer(overlay.shadowRoot)`,
+`overlay.shadowRoot` _before_ calling `createRenderer(overlay.shadowRoot)`,
 which is what puts the toolbar first in DOM order. `createRenderer()`
 itself is completely unaware the toolbar region exists; it still only
 knows about the two regions from the Session 4 amendment.

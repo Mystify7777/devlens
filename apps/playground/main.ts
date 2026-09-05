@@ -5,7 +5,6 @@ import { createNetworkPlugin } from "@devlens/network";
 import { createPanel } from "@devlens/panel";
 import { mountReactDemo } from "./react-demo";
 
-
 const bus = createEventBus();
 const store = createEventStore();
 connectStoreToBus(bus, store);

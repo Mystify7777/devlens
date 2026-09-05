@@ -25,11 +25,7 @@ function BuggyComponent(): ReactElement {
     throw new Error("Playground: intentional React render error");
   }
 
-  return (
-    <button onClick={() => setShouldThrow(true)}>
-      Throw inside React component
-    </button>
-  );
+  return <button onClick={() => setShouldThrow(true)}>Throw inside React component</button>;
 }
 
 /**
@@ -44,9 +40,7 @@ export function mountReactDemo(bus: EventBus, container: HTMLElement): void {
 
   const root = createRoot(container);
   root.render(
-    <DevLensErrorBoundary
-      fallback={<span>React component crashed — see Panel for details.</span>}
-    >
+    <DevLensErrorBoundary fallback={<span>React component crashed — see Panel for details.</span>}>
       <BuggyComponent />
     </DevLensErrorBoundary>
   );

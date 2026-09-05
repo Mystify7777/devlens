@@ -87,10 +87,10 @@ knowing before Import treats `id` collisions as an impossible case.
 ```ts
 interface DevLensEvent {
   readonly id: string;
-  readonly version: 1;               // literal 1, not `number`
+  readonly version: 1; // literal 1, not `number`
   readonly origin: string;
-  readonly category: EventCategory;  // BuiltinEventCategory | (string & {})
-  readonly severity: EventSeverity;  // closed union, 6 values
+  readonly category: EventCategory; // BuiltinEventCategory | (string & {})
+  readonly severity: EventSeverity; // closed union, 6 values
   readonly title: string;
   readonly message: string;
   readonly timestamp: number;
@@ -140,7 +140,7 @@ from the first event, or every event, in the array.
 
 Only that the text is syntactically valid JSON and produces some
 combination of objects, arrays, strings, numbers, booleans, and
-`null`. It guarantees nothing about *shape* — a syntactically valid
+`null`. It guarantees nothing about _shape_ — a syntactically valid
 JSON file can be `{}`, `[1, 2, 3]`, or a 50MB array of objects with
 none of `DevLensEvent`'s required fields.
 
@@ -170,15 +170,15 @@ simply never had one before now.
 Per-field, grounded in the `DevLensEvent`/`DevLensEventInput` contract
 above:
 
-| Concern | Existing precedent | Applies to Import? |
-|---|---|---|
-| `id`/`version`/`timestamp` defaulting | `report()` does this today | Not directly — imported events already *have* these values, and regenerating them would discard the original capture identity/time, defeating the purpose of importing a past session |
-| Deep immutability | `deepFreeze()`, applied by `report()` | Yes, unmodified reuse — freezing is source-agnostic |
-| Shape/type validation | **Does not exist anywhere in the codebase today** | Yes — this is net-new work, not reuse |
-| `severity` enum check | TypeScript-only today | Needs a runtime check for Import specifically |
-| `id` collision handling | Not handled anywhere (Bus/Store assume good faith) | Open — first time this question has ever needed an answer |
-| Bulk-insertion ordering | `RingBuffer` is FIFO, no timestamp sort | Open — importing an old session into a Store with live events interleaves by insertion order, not by `timestamp` |
-| Notification volume | `store.add()` calls `notify()` once per event | Open — importing N events fires N synchronous Panel re-renders unless something batches it |
+| Concern                               | Existing precedent                                 | Applies to Import?                                                                                                                                                                    |
+| ------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`/`version`/`timestamp` defaulting | `report()` does this today                         | Not directly — imported events already _have_ these values, and regenerating them would discard the original capture identity/time, defeating the purpose of importing a past session |
+| Deep immutability                     | `deepFreeze()`, applied by `report()`              | Yes, unmodified reuse — freezing is source-agnostic                                                                                                                                   |
+| Shape/type validation                 | **Does not exist anywhere in the codebase today**  | Yes — this is net-new work, not reuse                                                                                                                                                 |
+| `severity` enum check                 | TypeScript-only today                              | Needs a runtime check for Import specifically                                                                                                                                         |
+| `id` collision handling               | Not handled anywhere (Bus/Store assume good faith) | Open — first time this question has ever needed an answer                                                                                                                             |
+| Bulk-insertion ordering               | `RingBuffer` is FIFO, no timestamp sort            | Open — importing an old session into a Store with live events interleaves by insertion order, not by `timestamp`                                                                      |
+| Notification volume                   | `store.add()` calls `notify()` once per event      | Open — importing N events fires N synchronous Panel re-renders unless something batches it                                                                                            |
 
 ## Failure semantics
 
@@ -194,7 +194,7 @@ is malformed.
 **Per-event rejection.** Valid events are imported; malformed ones are
 skipped and reported (console warning, a returned list of skip
 reasons, or similar). More forgiving of partially-corrupt files or
-hand-edited exports. Costs a decision about *how* skip results are
+hand-edited exports. Costs a decision about _how_ skip results are
 surfaced to the person doing the import, which is itself a small
 design question, not a given.
 
@@ -258,7 +258,7 @@ cost.
 **C. Bus-based import.** Feed imported events through
 `EventBus.report()` somehow, reusing its middleware/freeze pipeline.
 Rejected by the identity problem above — `report()`'s entire job is
-assigning identity to *new* occurrences; an imported event is by
+assigning identity to _new_ occurrences; an imported event is by
 definition not new. Forcing it through `report()` would need a special
 "don't regenerate identity" mode that doesn't exist and would only
 ever be used by Import, which is just Option A with extra
@@ -338,7 +338,7 @@ draft.
 8. **Import cannot be treated as `forEach(store.add)` without a
    deliberate decision.** Finding 7 has a direct consequence: if
    expected import size can be substantial, then repeated `add()`
-   calls make per-event notification part of Import's *observable*
+   calls make per-event notification part of Import's _observable_
    behavior, not just its internal implementation. This raises,
    without yet resolving, whether the Store needs a batch entry point
    (`addMany()`-shaped, one notification after the batch) versus
@@ -413,7 +413,7 @@ Rationale:
 return shape is an open question, not settled by choosing Option A.
 Candidates — a boolean, the validated `DevLensEvent` on success (throw
 or return null on failure), or a richer result type that explains
-*why* an event failed — are deferred to the Failure Semantics decision
+_why_ an event failed — are deferred to the Failure Semantics decision
 below, since the right shape depends on whether failure is
 whole-import or per-event. Also carried forward: `deepFreeze()` is
 composed by the Import layer, not folded into
@@ -426,21 +426,21 @@ function.
 
 The distinguishing test isn't "does this put events into the Store"
 (every capture source does that) — it's **architectural role**:
-whether the capability independently *observes the host environment*
+whether the capability independently _observes the host environment_
 (Runtime/Console/Network all do — hence their own packages, own
 `install()`/`uninstall()` lifecycle, own public contract) versus
-whether it *operates on a session representation DevLens itself
-already produced* (Import's only input is DevLens's own Export
+whether it _operates on a session representation DevLens itself
+already produced_ (Import's only input is DevLens's own Export
 output — it observes nothing, has no lifecycle, and is Panel-triggered
 rather than independently running).
 
-| | Network | Import |
-|---|---|---|
-| Live capture mechanism | Yes | No — one-shot session operation |
-| Source of data | Browser API interception | External file, produced by DevLens's own Export |
-| Lifecycle | `install()`/`uninstall()` | None |
-| Natural counterpart | Independent capture source | `serialize.ts` (Export), already in `@devlens/panel` |
-| Package boundary justified | Yes | Not yet |
+|                            | Network                    | Import                                               |
+| -------------------------- | -------------------------- | ---------------------------------------------------- |
+| Live capture mechanism     | Yes                        | No — one-shot session operation                      |
+| Source of data             | Browser API interception   | External file, produced by DevLens's own Export      |
+| Lifecycle                  | `install()`/`uninstall()`  | None                                                 |
+| Natural counterpart        | Independent capture source | `serialize.ts` (Export), already in `@devlens/panel` |
+| Package boundary justified | Yes                        | Not yet                                              |
 
 Structure, starting flat rather than preemptively nested:
 
@@ -484,7 +484,7 @@ today — nothing in the codebase currently produces anything but
 `version: 1`, so the check guards against exactly nothing right now.
 The reason to adopt it now rather than later: Import is the first
 place `version` becomes semantically load-bearing at all. Leaving it
-inert while introducing the first consumer that *could* care about it
+inert while introducing the first consumer that _could_ care about it
 creates an ambiguous contract that a future schema change could
 violate silently — accepted by an importer that never checked,
 producing malformed/mismatched semantics that "look fine" at the type
@@ -511,9 +511,11 @@ accepted by a v1 importer that never checked.
 level (per Finding 6 — Export writes no document-level metadata). The
 validator must not assume every event in an imported array shares one
 version. A mixed array —
+
 ```text
 [{ version: 1, ... }, { version: 2, ... }]
 ```
+
 — means the second event is incompatible on its own terms; the first
 is not affected by the second's failure. What happens to the rest of
 the import when one event fails is Failure Semantics (below), decided
@@ -556,13 +558,13 @@ validation completes
 questions, and #3 does not imply per-event failure.** `version` is
 still checked per event — the validator examines each event on its
 own terms and can identify, e.g., that event index 2 in an array is
-`version: 2` while the rest are `version: 1`. What the *import
-operation* does with that finding is a separate decision: it treats
+`version: 2` while the rest are `version: 1`. What the _import
+operation_ does with that finding is a separate decision: it treats
 one invalid event as sufficient grounds to reject the whole session,
 not just that event.
 
 **Why atomicity wins here, specifically:** Import restores a
-*historical* session, and a partially restored one is actively
+_historical_ session, and a partially restored one is actively
 misleading, not just incomplete. A 4,000-event import with 12
 malformed events, under per-event rejection, produces a Panel showing
 3,988 events with no data-level indication that anything was dropped
@@ -574,9 +576,11 @@ entirely: either the Store gains exactly the session that was
 exported, or it gains nothing.
 
 **Validator shape, now resolved by this decision:**
+
 ```ts
 validateImportedEvents(input): DevLensEvent[]
 ```
+
 Returns the validated events on success; failure prevents the import
 from proceeding at all (exact throw-vs-result-type mechanics not
 settled here, but the shape is "all or nothing," not
@@ -585,7 +589,7 @@ forward from the Architectural decision above — no need for a richer
 per-event partial-success result type, since failure semantics don't
 require one.
 
-**Error reporting stays a separate, still-open concern.** *Why*
+**Error reporting stays a separate, still-open concern.** _Why_
 validation failed (unsupported version, invalid severity, missing
 message, malformed structure, etc.) should still be preserved and
 surfaced as an Import-level failure — but this is about explaining a
@@ -639,8 +643,8 @@ schema version) — not something Import backs into because JSON makes
 extra keys easy to carry along silently.
 
 **Consequence carried into implementation:** the validator must
-correctly distinguish an *unknown property* (reject) from an
-*allowed extensible value* on a known field, such as an arbitrary
+correctly distinguish an _unknown property_ (reject) from an
+_allowed extensible value_ on a known field, such as an arbitrary
 string `category` (accept) — these are structurally different
 situations that need explicit test coverage when implementation
 starts, not just a flat "reject anything not in a fixed key list"
@@ -665,7 +669,7 @@ right data structure.
 "imported identity is historical identity and must not be rewritten."
 Regenerating an `id` on collision keeps `timestamp` and every other
 field intact but changes the one thing that identifies the event as
-*that specific historical occurrence*. That's exactly the kind of
+_that specific historical occurrence_. That's exactly the kind of
 identity-mutation #1 ruled out when it disqualified routing through
 `EventBus.report()`.
 
@@ -676,6 +680,7 @@ even if nothing currently enforces that. More concretely, the common
 real-world case makes this decision itself: re-importing the same
 exported file (e.g. after a crash) should behave predictably, not
 silently double the Store's contents:
+
 ```text
 Store already contains session A
         ↓
@@ -683,6 +688,7 @@ Import session A again
         ↓
 collision detected → import rejected
 ```
+
 This tells the caller "these events are already present" rather than
 silently producing 2,000 events from what was actually one session
 imported twice. If "replace the current Store with this session" is
@@ -707,6 +713,7 @@ Store's existing ids, handles both cases together.
 **Ordering consequence for implementation:** `id` collision checking
 happens alongside the rest of validation, before any Store mutation —
 consistent with #4's atomicity:
+
 ```text
 parse → validate every event (shape, version, unknown fields)
       → validate ids (within batch + against Store)
@@ -734,7 +741,7 @@ historical events with existing live events.
 exists anywhere in the codebase — not in `store.ts`, not in
 `panel.ts`, not in `renderer.ts`. `EventStore.getAll()` returns
 `RingBuffer.toArray()` verbatim, in pure insertion order. The Panel's
-event list has only ever *looked* chronological as an accidental
+event list has only ever _looked_ chronological as an accidental
 side effect of live capture — insertion time and occurrence time have
 always been the same moment for Runtime/Console/Network, so nothing
 has ever needed to enforce the equivalence explicitly. Import is the
@@ -744,7 +751,7 @@ it.
 
 **Why not insertion-order-only:** would turn that accidental property
 into a known, user-visible inconsistency — an imported event with an
-earlier `timestamp` than existing live events would render *after*
+earlier `timestamp` than existing live events would render _after_
 them in the Panel, with nothing to correct it, silently violating a
 behavior every consumer today implicitly depends on without any of
 them actually enforcing it.
@@ -760,22 +767,27 @@ assumption that Store order is the order. Import alone doesn't
 justify destabilizing that.
 
 **What this buys, concretely — an exact round trip:**
+
 ```text
 Store A → export → DevLensEvent[] → import into empty Store → Store B
 ```
+
 ```text
 A[i] ≡ B[i]
 ```
+
 for every imported event, including its original `timestamp` and
 `id`, since Export preserves `store.getAll()`'s order and Import (into
 an empty Store) inserts in that same serialized order.
 
 **What v1 Import deliberately does not support, stated explicitly so
 it isn't mistaken for an oversight later:**
+
 ```text
 Import  = restore a session into an empty Store
 Import ≠ merge arbitrary historical events into a live session
 ```
+
 The v1 workaround for wanting to inspect a past session alongside a
 live one is manual: export/save the current session, clear the Store,
 import the historical one. Not a merge feature — a sequencing of
@@ -822,14 +834,14 @@ mean up to 10,000 synchronous Store notifications, each triggering a
 Panel update/render cycle, in a tight synchronous loop. The Panel's
 `MAX_RENDERED_EVENTS` cap (300) limits how many DOM rows get
 materialized, but it doesn't limit how many times the Store
-*subscriber* is invoked — every `add()` call still fires `notify()`
+_subscriber_ is invoked — every `add()` call still fires `notify()`
 regardless of what the renderer ends up doing with it. `10,000 events
 ≠ 10,000 DOM nodes`, but it does mean 10,000 update cycles under the
 naive approach.
 
 **Why there's no useful intermediate state to preserve here, which is
 what makes batching safe rather than merely convenient.** Per #7,
-Import is one-shot session *restoration*, not a live merge — there is
+Import is one-shot session _restoration_, not a live merge — there is
 no meaningful reason for the Panel to render 1 event, then 2, then 3,
 climbing toward the final imported total. The user only cares about
 the fully restored session. Collapsing N notifications into one
@@ -841,15 +853,17 @@ see.
 remains a pure storage operation, structurally identical to `add()` —
 it does not validate, freeze, or otherwise become an integrity
 boundary. That responsibility stays entirely upstream, in Import:
+
 ```text
 Import: parse → validate all → check version → check unknown fields
       → check ids → require empty Store → freeze
       → Store.addMany(events)  → ONE notification → ONE Panel render
 ```
+
 This is a materially smaller change than Option B (rejected in #1)
 would have been — Option B would have made the Store itself
 responsible for establishing event validity; `addMany()` only changes
-*how many times the Store announces that new data has arrived*, which
+_how many times the Store announces that new data has arrived_, which
 is a batching concern, not a validation concern.
 
 **Deliberately not built:** a stateful batching API
@@ -864,11 +878,11 @@ need doesn't call for.
 rejected:** the research consistently favored options requiring zero
 Core changes (Option A over B in #1; empty-Store restriction over
 Store/Panel sorting in #7) — but `addMany()` responds to a concrete,
-demonstrated primitive gap rather than a hypothetical one: *`EventStore`
+demonstrated primitive gap rather than a hypothetical one: _`EventStore`
 currently assumes one insertion corresponds to one observable update,
 and session restoration is a legitimate bulk-ingestion case where that
 assumption is measurably inefficient and produces no useful
-intermediate state.* That's a real, narrow justification, not
+intermediate state._ That's a real, narrow justification, not
 speculative infrastructure — and Import isn't necessarily the only
 future consumer of a batched-insert primitive (a future replay
 mechanism, test harness, or persisted-store restoration could

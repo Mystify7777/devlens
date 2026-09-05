@@ -69,9 +69,7 @@ export interface RequestDescriptor {
  * requested, it doesn't attempt to replicate the fetch spec's full
  * Request-construction algorithm for its own sake.
  */
-function resolveRequestDescriptor(
-  args: Parameters<typeof fetch>
-): RequestDescriptor {
+function resolveRequestDescriptor(args: Parameters<typeof fetch>): RequestDescriptor {
   const [input, init] = args;
   let method = "GET";
   let url: string;
@@ -146,4 +144,3 @@ export function createFetchInterceptor(
     return result;
   };
 }
-

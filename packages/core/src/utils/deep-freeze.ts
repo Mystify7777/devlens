@@ -5,9 +5,7 @@
  * plugin attaches `window` or a DOM node to `metadata`. Also guards
  * against cyclic references via a WeakSet of already-visited objects.
  */
-function isPlainObjectOrArray(
-  value: unknown
-): value is Record<string, unknown> | unknown[] {
+function isPlainObjectOrArray(value: unknown): value is Record<string, unknown> | unknown[] {
   if (Array.isArray(value)) return true;
   if (value === null || typeof value !== "object") return false;
   const proto = Object.getPrototypeOf(value);

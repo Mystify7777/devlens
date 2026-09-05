@@ -13,12 +13,12 @@ v1 intercepts exactly: `console.log`, `console.info`, `console.warn`,
 ## Severity mapping
 
 | Console method | DevLens severity |
-| ------- | ------- |
-| log | info |
-| info | info |
-| debug | debug |
-| warn | warn |
-| error | error |
+| -------------- | ---------------- |
+| log            | info             |
+| info           | info             |
+| debug          | debug            |
+| warn           | warn             |
+| error          | error            |
 
 ## Category
 
@@ -93,8 +93,8 @@ let isDispatching = false;
 
 function wrap(method, severity) {
   return (...args) => {
-    original[method](...args);       // always runs, unconditionally
-    if (isDispatching) return;       // guard only wraps the dispatch step
+    original[method](...args); // always runs, unconditionally
+    if (isDispatching) return; // guard only wraps the dispatch step
     isDispatching = true;
     const event = normalize(method, severity, args); // unguarded — bugs here should surface
     try {
@@ -134,7 +134,7 @@ Two things worth being explicit about:
 - Console groups (`group`/`groupEnd`) and timers (`time`/`timeEnd`) —
   no concrete consumer need yet.
 - `console.table`, `console.trace`, `console.assert`, `console.clear`.
-- Detecting/warning about a *different* library also wrapping the same
+- Detecting/warning about a _different_ library also wrapping the same
   console method (double-wrapping across tools, not within DevLens) —
   Runtime's idempotency guard prevents DevLens double-wrapping itself,
   but conflicts with third-party console-patching tools are out of

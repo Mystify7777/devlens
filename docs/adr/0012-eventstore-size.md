@@ -14,7 +14,7 @@ unmodified, as this ADR always specified.
 
 `EventStore`'s public interface has no way to answer "how many events
 does this Store currently hold?" in constant time. `capacity`
-(ADR-0011 amendment) exposes the Store's configured *maximum* —
+(ADR-0011 amendment) exposes the Store's configured _maximum_ —
 fixed for the Store's lifetime — but nothing exposes current
 occupancy, which changes on every `add()`, `addMany()`, `clear()`, and
 under `RingBuffer` eviction.
@@ -94,16 +94,16 @@ justifying `addMany()`'s notification batching.
 
 ### Behavioral contract
 
-| Condition | `size` |
-|---|---|
-| Newly created, empty Store | `0` |
-| After `add(event)` | increments by exactly 1 |
-| After `addMany(events)` | increments by `events.length`, in one step |
-| After `addMany([])` | unchanged — matches `addMany()`'s existing true-no-op contract (no mutation, no notification) |
-| After `clear()` | resets to `0` |
+| Condition                         | `size`                                                                                                                                                           |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Newly created, empty Store        | `0`                                                                                                                                                              |
+| After `add(event)`                | increments by exactly 1                                                                                                                                          |
+| After `addMany(events)`           | increments by `events.length`, in one step                                                                                                                       |
+| After `addMany([])`               | unchanged — matches `addMany()`'s existing true-no-op contract (no mutation, no notification)                                                                    |
+| After `clear()`                   | resets to `0`                                                                                                                                                    |
 | Once the Store reaches `capacity` | pinned at `capacity`; further `add()`/`addMany()` calls do not increase it further, regardless of how many events are pushed or how many are evicted as a result |
-| After `destroy()` | resets to `0` (`destroy()` already calls `buffer.clear()`) |
-| Reuse after `destroy()` | behaves exactly as a freshly-created Store — no lingering value from before `destroy()` was called |
+| After `destroy()`                 | resets to `0` (`destroy()` already calls `buffer.clear()`)                                                                                                       |
+| Reuse after `destroy()`           | behaves exactly as a freshly-created Store — no lingering value from before `destroy()` was called                                                               |
 
 No condition above introduces new Store behavior. `size` only makes
 existing, already-correct `RingBuffer` occupancy observable at the
@@ -131,7 +131,7 @@ responsibility — no validation, no policy, no behavior change — it
 only exposes a value the Store's own internal `RingBuffer` was already
 computing correctly. This is the same kind of narrow, additive
 extension ADR-0011 already established a precedent for, not a new
-architectural decision about what the Store *is*.
+architectural decision about what the Store _is_.
 
 ## Scope boundaries (explicitly not part of this decision)
 
@@ -142,7 +142,7 @@ addition:
 
 - **`getById(id)` / `get(id)`** — a separate, previously-identified gap
   (Panel currently resolves a single event by a full `getAll().find()`
-  scan). Classified as *Useful, not Required* by the Consumer Boundary
+  scan). Classified as _Useful, not Required_ by the Consumer Boundary
   investigation that motivated this ADR; not decided here.
 - **A richer subscription protocol** (typed notifications
   distinguishing `add`/`addMany`/`clear`, per-event `addMany` payloads,

@@ -67,7 +67,7 @@ avoids patching globals, but MSW's own documented limitations page
 states Firefox does not notify a Service Worker of `XMLHttpRequest`
 calls at all — a documented cross-browser reliability gap, for exactly
 the API (XHR) this plugin needs to intercept. Every comparable
-*observation* tool surveyed (Sentry, Datadog RUM, `@mswjs/interceptors`
+_observation_ tool surveyed (Sentry, Datadog RUM, `@mswjs/interceptors`
 in Node) patches directly rather than using a Service Worker; MSW's own
 Service Worker use case is mocking, not observing, and isn't a directly
 comparable precedent.
@@ -86,8 +86,8 @@ guaranteed same-origin.
 v1 captures method, URL, HTTP status (when available), duration, and
 an explicit `outcome`. **Headers and request/response bodies are not
 captured, and there is no v1 configuration to opt into capturing
-them.** Query parameter *values* are redacted by default
-(`?token=***`), while parameter *names* are preserved — stripping the
+them.** Query parameter _values_ are redacted by default
+(`?token=***`), while parameter _names_ are preserved — stripping the
 whole query string would throw away real diagnostic value (which
 parameters were even sent), while keeping values by default is the
 wrong default for anything that might carry a token or PII. This
@@ -143,7 +143,7 @@ best-effort distinction for `fetch`, not a guarantee.
 ### Network is still a Plugin
 
 The `Plugin` contract (ADR-0006) — `install()`/`uninstall()`, both
-idempotent — says nothing about *how* a plugin captures data.
+idempotent — says nothing about _how_ a plugin captures data.
 Runtime's `install()` attaches listeners; Console's wraps five console
 methods; Network's wraps `fetch`/`XHR` and restores them on
 `uninstall()`. The mechanism scales in how invasive it is across those
@@ -164,22 +164,22 @@ Inspector was explicitly designed during Session 4 with generic
 key-value rendering and no hardcoded knowledge of event categories,
 specifically so that a future category could "render with zero
 Inspector changes later." This ADR is the point where that design bet
-actually gets tested; if it turns out Panel *does* need changes to
+actually gets tested; if it turns out Panel _does_ need changes to
 render Network events well, that's a real finding worth its own
 amendment, not something to route around silently.
 
 ## Scope: v1 boundary
 
-| In scope for v1 | Deferred, not rejected |
-|---|---|
-| Fetch API | WebSocket |
-| XMLHttpRequest | Server-Sent Events |
-| success / http-error / network-error / aborted / timeout (draft shape — see Open questions) | Streaming response bodies |
-| Method, URL (query values redacted), status, duration | Request/response headers |
-| | Request/response bodies |
-| | Service-Worker-intercepted requests |
-| | Response `Content-Type`/size without the body itself |
-| | `redirect: "manual"` (surfacing intermediate redirect hops) |
+| In scope for v1                                                                             | Deferred, not rejected                                      |
+| ------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| Fetch API                                                                                   | WebSocket                                                   |
+| XMLHttpRequest                                                                              | Server-Sent Events                                          |
+| success / http-error / network-error / aborted / timeout (draft shape — see Open questions) | Streaming response bodies                                   |
+| Method, URL (query values redacted), status, duration                                       | Request/response headers                                    |
+|                                                                                             | Request/response bodies                                     |
+|                                                                                             | Service-Worker-intercepted requests                         |
+|                                                                                             | Response `Content-Type`/size without the body itself        |
+|                                                                                             | `redirect: "manual"` (surfacing intermediate redirect hops) |
 
 ## Open questions (not decided by this ADR)
 

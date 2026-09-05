@@ -16,7 +16,7 @@ later does it succeed, fail, or get abandoned. Before writing an ADR
 that just answers "how do we capture `fetch`," we need to answer a
 prior question: does DevLens's event model — one real-world occurrence
 produces exactly one immutable `DevLensEvent` — actually hold for
-something with a *duration*, or does Network expose an assumption that
+something with a _duration_, or does Network expose an assumption that
 was accidentally baked into Runtime and Console without anyone
 deciding it on purpose?
 
@@ -40,14 +40,14 @@ job is "what request did the app make, and what happened to it" — not
 Worth asking directly, since terminology tends to ossify once it's
 written into an ADR title. Runtime observes `window`; Console observes
 `console`; Network would observe `fetch`/`XHR` — and unlike the first
-two, *observing* Network requires actively wrapping those globals,
+two, _observing_ Network requires actively wrapping those globals,
 not just listening to them. That's a real difference in mechanism. Is
-it a real difference in *kind* — should Network be some other category
+it a real difference in _kind_ — should Network be some other category
 of thing entirely, not a Plugin?
 
 Looking at what ADR-0006 actually specifies, the Plugin contract is
 `{ install(): void; uninstall(): void }`, both idempotent — and
-nothing in that contract says anything about *how* a plugin captures
+nothing in that contract says anything about _how_ a plugin captures
 data. It was never mechanism-specific to begin with: Runtime's
 `install()` attaches listeners, Console's `install()` wraps five
 console methods (already a form of interception, just a friendlier
@@ -55,7 +55,7 @@ one than `fetch`). Network's `install()` would patch `fetch` and
 `XHR.prototype` and its `uninstall()` would restore the originals —
 more invasive than Runtime, more invasive even than Console, but
 answering the exact same question every other plugin's `install()`
-answers: *start observing, cleanly, reversibly.* The mechanism scales
+answers: _start observing, cleanly, reversibly._ The mechanism scales
 in aggressiveness across Runtime → Console → Network; the contract
 those three mechanisms sit behind does not change at all.
 
@@ -67,7 +67,7 @@ different layers, and it's expected (not a design smell) for different
 plugins to differ wildly in the former while sharing the latter
 exactly. Naming that explicitly now means the next capture source
 after Network — whatever it ends up being — doesn't have to re-litigate
-whether *its* mechanism is "too invasive to still be a Plugin" either.
+whether _its_ mechanism is "too invasive to still be a Plugin" either.
 
 ## Stress-testing the one-event model against real scenarios
 
@@ -111,12 +111,12 @@ response was received. The parsing failure, if the application doesn't
 catch it, becomes an uncaught exception Runtime's existing
 `unhandledrejection`/`error` listeners already capture on their own,
 with no coordination required between the two plugins. If the
-application *does* catch it silently, neither plugin reports anything
+application _does_ catch it silently, neither plugin reports anything
 — consistent with the "What Network observes" framing above: DevLens
 surfaces what's visible at the API boundary a developer already
 reads, not things the developer's own code chose to swallow. Worth
 stating explicitly in the eventual ADR: Network's success/error
-boundary sits at the HTTP layer specifically *because* it doesn't
+boundary sits at the HTTP layer specifically _because_ it doesn't
 inspect bodies, not as two independent decisions that happen to agree.
 
 **Scenario 3: HTTP 500 with a valid JSON body — outcome
@@ -146,10 +146,10 @@ of these still applies, rather than inheriting them for free.
 1. **What is the semantic unit of observation?** One event on
    completion, two correlated events (start + end), or a mutable event
    updated in place?
-2. **What is the *identity* of a request** — not just what data it
+2. **What is the _identity_ of a request** — not just what data it
    carries, but what makes two requests "the same operation" or
    different ones? `GET /users/123` and `GET /users/456` are
-   technically different URLs; are they the same *endpoint*, viewed
+   technically different URLs; are they the same _endpoint_, viewed
    300 times, or 300 different things? `/products?page=1` and
    `/products?page=2` raise the same question from the query-string
    side. This is a distinct question from redaction (which asks "is
@@ -162,7 +162,7 @@ of these still applies, rather than inheriting them for free.
    endpoints called with different arguments.
 3. **What does a Network event actually need to carry**, and — this
    turned out to be a much bigger question than it looks — what should
-   it explicitly *not* carry by default?
+   it explicitly _not_ carry by default?
 4. **How is "failure" classified?** An HTTP 500 that returns valid
    JSON, a timeout, a DNS failure, and `AbortController.abort()` are
    observably different things at the browser API level, but many
@@ -204,8 +204,8 @@ Three findings that matter here:
   warns against.
 - **Query parameter redaction is a first-class, documented default**,
   not an afterthought. .NET's `HttpClient` instrumentation redacts
-  query parameter *values* by default (`?sig=*`) while preserving the
-  parameter *names*, with an explicit override list of additional
+  query parameter _values_ by default (`?sig=*`) while preserving the
+  parameter _names_, with an explicit override list of additional
   keys to always redact. This is a more useful default than either
   extreme — stripping the whole query string throws away real
   diagnostic value (which parameters were even sent), while keeping
@@ -213,7 +213,7 @@ Three findings that matter here:
   contain a token or PII.
 - **When an error occurs before a response is received, `error.type`
   is a low-cardinality identifier** (exception type, not the raw
-  exception message); when a response *is* received, `error.type` is
+  exception message); when a response _is_ received, `error.type` is
   the status code itself. Two different failure shapes, deliberately
   represented differently rather than flattened into one "error"
   boolean.
@@ -225,7 +225,7 @@ time every resource fetch, including `fetch()` and `XHR`. Two things
 worth knowing before inventing DevLens's own duration measurement:
 
 - `PerformanceEntry.duration` is defined as `responseEnd - startTime`
-  — this *includes* redirects and any connection-queueing/blocking
+  — this _includes_ redirects and any connection-queueing/blocking
   time, not just "time the response body was in flight." A
   `responseEnd - fetchStart` measurement is the "time to fetch,
   excluding redirects" variant. These are genuinely different numbers,
@@ -261,8 +261,8 @@ worth knowing before inventing DevLens's own duration measurement:
   DevLens ever considers response bodies later — it's not a free
   addition to the interceptor.
 - **URL normalization is a documented, common need**, but Sentry
-  implements it as an opt-in hook (`beforeStartSpan`) the *host
-  application* configures with its own route knowledge (e.g.
+  implements it as an opt-in hook (`beforeStartSpan`) the _host
+  application_ configures with its own route knowledge (e.g.
   `/users/12312012` → `/users/:userid`), not something the SDK infers
   automatically. Nobody tries to guess route parameters generically.
 - **Status `0` is a recurring source of confusion in their own issue
@@ -304,7 +304,7 @@ worth knowing before inventing DevLens's own duration measurement:
 
 Not studied for interception technique (MSW's mocking use case is
 different from DevLens's observing use case) but for what it reveals
-about the *reliability* of alternatives to direct monkey-patching:
+about the _reliability_ of alternatives to direct monkey-patching:
 
 - MSW's browser strategy is Service-Worker-based interception,
   specifically framed as avoiding "patching `fetch` and meddling with
@@ -314,12 +314,12 @@ about the *reliability* of alternatives to direct monkey-patching:
   XMLHttpRequest at all** — even with a matching handler registered,
   Firefox-originated XHRs are invisible to a Service-Worker-based
   interceptor. Their own Node.js interception library
-  (`@mswjs/interceptors`) does *not* use a Service Worker — it extends
+  (`@mswjs/interceptors`) does _not_ use a Service Worker — it extends
   `http`/`https`/`XMLHttpRequest`/`fetch` directly, the same
   monkey-patching approach MSW frames as something to avoid in the
   browser.
 - This is a concrete, documented case where the "more principled"
-  interception mechanism (Service Worker) is measurably *less*
+  interception mechanism (Service Worker) is measurably _less_
   reliable cross-browser than direct patching, for exactly the API
   (XHR) DevLens would also need to intercept. Worth weighing against
   any instinct to reach for a Service Worker as a "cleaner" alternative
@@ -337,11 +337,11 @@ that directly constrains Question 3, not just a design opinion.
 - **`fetch()` has no native concept of a request timeout at all.**
   Every timeout implementation is caller-side, via `AbortController`.
   Until recently this meant a `fetch()` promise rejects with the exact
-  same `AbortError` regardless of *why* it was aborted — a real user
+  same `AbortError` regardless of _why_ it was aborted — a real user
   cancellation and a caller-implemented timeout were indistinguishable
   from the interceptor's point of view.
 - **`AbortSignal.timeout()`** (a relatively recent, standardized
-  addition) changes this *if the calling code uses it*: a timeout
+  addition) changes this _if the calling code uses it_: a timeout
   triggered this way rejects with a distinct `TimeoutError`, separate
   from the `AbortError` a manual `controller.abort()` produces. But
   this only helps DevLens distinguish the two cases when the
@@ -392,7 +392,7 @@ none of the candidate designs above answer on their own: is that one
 request, or three? The browser itself gives an ambiguous answer
 depending on which API is asked — `fetch()` with its default
 `redirect: "follow"` mode resolves the whole chain silently and only
-ever exposes the *final* response to calling code (the intermediate
+ever exposes the _final_ response to calling code (the intermediate
 `301`/`302` responses are invisible unless `redirect: "manual"` is
 used, which changes browser behavior — the request stops following
 redirects at all and hands back an opaque response for the caller to
@@ -401,13 +401,13 @@ the end" behavior with no manual-mode equivalent at all.
 
 That asymmetry matters for Candidate A specifically: if DevLens
 observes only what `fetch`/`XHR` naturally expose, a redirect chain is
-*already* one request as far as the interceptor can see — there's no
+_already_ one request as far as the interceptor can see — there's no
 extra design decision required to get "one event per redirect chain,"
 because the browser doesn't hand DevLens the intermediate hops in the
 first place, under either capture API, without opting into different
 (and more invasive) behavior. The real open question is narrower than
 "one event or three": it's whether v1 should bother requesting
-`redirect: "manual"` to *deliberately* surface intermediate hops as
+`redirect: "manual"` to _deliberately_ surface intermediate hops as
 separate events, which is real additional interception complexity
 (the "response" DevLens would see in manual mode is a special opaque
 redirect response, not a normal one) for a capability nothing in this
@@ -421,56 +421,56 @@ a directly comparable precedent here.
 
 ### Semantic unit of observation
 
-| | One event on completion | Two correlated events | Mutable event |
-|---|---|---|---|
-| Fits existing immutability (ADR-0001) | Yes, unchanged | Yes, unchanged | No — requires Core changes |
-| Fits append-only Store (ADR-0004) | Yes, unchanged | Yes, unchanged | No — requires Core changes |
-| Visibility into in-flight requests | None | Yes | Yes |
-| New concept every consumer must learn | None | "these two events are one occurrence" | "this event can change under you" |
-| Precedent in this project | Matches Runtime/Console exactly | None | None |
-| Precedent in industry survey | OTel spans *do* have a start/end lifecycle, but that's a server-side tracing concept with its own infrastructure (trace context, span processors) that DevLens has no equivalent of | — | — |
+|                                       | One event on completion                                                                                                                                                             | Two correlated events                 | Mutable event                     |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- | --------------------------------- |
+| Fits existing immutability (ADR-0001) | Yes, unchanged                                                                                                                                                                      | Yes, unchanged                        | No — requires Core changes        |
+| Fits append-only Store (ADR-0004)     | Yes, unchanged                                                                                                                                                                      | Yes, unchanged                        | No — requires Core changes        |
+| Visibility into in-flight requests    | None                                                                                                                                                                                | Yes                                   | Yes                               |
+| New concept every consumer must learn | None                                                                                                                                                                                | "these two events are one occurrence" | "this event can change under you" |
+| Precedent in this project             | Matches Runtime/Console exactly                                                                                                                                                     | None                                  | None                              |
+| Precedent in industry survey          | OTel spans _do_ have a start/end lifecycle, but that's a server-side tracing concept with its own infrastructure (trace context, span processors) that DevLens has no equivalent of | —                                     | —                                 |
 
 ### Interception mechanism
 
-| | Monkey-patch `fetch`/`XHR` | Service Worker |
-|---|---|---|
-| Violates "never overwrite a globals" (ADR-0005 principle) | Yes, unavoidably | No |
-| Cross-browser XHR reliability | Reliable | Documented gap: invisible to Firefox entirely (MSW's own finding) |
-| Setup complexity for the host app | None — same `install()`/`uninstall()` shape as every other plugin | Requires registering and scoping a separate worker script |
-| Precedent among tools with the same goal (observe, not mock) | Sentry, Datadog RUM, `@mswjs/interceptors` (Node) all patch directly | MSW (browser mocking use case, not observation) |
+|                                                              | Monkey-patch `fetch`/`XHR`                                           | Service Worker                                                    |
+| ------------------------------------------------------------ | -------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Violates "never overwrite a globals" (ADR-0005 principle)    | Yes, unavoidably                                                     | No                                                                |
+| Cross-browser XHR reliability                                | Reliable                                                             | Documented gap: invisible to Firefox entirely (MSW's own finding) |
+| Setup complexity for the host app                            | None — same `install()`/`uninstall()` shape as every other plugin    | Requires registering and scoping a separate worker script         |
+| Precedent among tools with the same goal (observe, not mock) | Sentry, Datadog RUM, `@mswjs/interceptors` (Node) all patch directly | MSW (browser mocking use case, not observation)                   |
 
 ### Data captured by default
 
-| | Method/URL/status/duration/outcome | + headers | + bodies |
-|---|---|---|---|
-| Privacy risk | Low | Real (auth headers, cookies) | High (arbitrary payload content) |
-| Matches Sentry/Datadog defaults | Yes | No (opt-in in both) | No (opt-in in both, and costly in Sentry's case) |
-| Useful without configuration | Yes | Situational | Situational |
+|                                 | Method/URL/status/duration/outcome | + headers                    | + bodies                                         |
+| ------------------------------- | ---------------------------------- | ---------------------------- | ------------------------------------------------ |
+| Privacy risk                    | Low                                | Real (auth headers, cookies) | High (arbitrary payload content)                 |
+| Matches Sentry/Datadog defaults | Yes                                | No (opt-in in both)          | No (opt-in in both, and costly in Sentry's case) |
+| Useful without configuration    | Yes                                | Situational                  | Situational                                      |
 
 ## Architectural evaluation
 
 Everything above explains what the industry converged on and why.
-That's a different argument from "why should *DevLens* choose this" —
+That's a different argument from "why should _DevLens_ choose this" —
 industry convergence is evidence, not by itself a reason binding on
 this project. The table below evaluates each candidate against
 DevLens's own existing, already-accepted commitments, not general
 best practice:
 
-| Principle | A (one event, on completion) | B (two correlated events) | C (mutable event) |
-|---|---|---|---|
-| Events stay immutable once reported (ADR-0001/0002) | Unchanged — Core needs no changes | Unchanged — each of the two events is still immutable individually | Violated — the entire point of C is updating an event after report |
-| Store stays append-only (ADR-0004) | Unchanged | Unchanged | Violated — requires an `update()` Store never had |
-| One real-world occurrence → one event (the pattern every existing source follows, never written down as its own ADR but true of Runtime and Console alike) | Holds exactly | Broken — "these two events are actually one occurrence" is a new concept nothing downstream currently knows how to interpret | Broken differently — one occurrence, but the event itself isn't a fixed fact anymore |
-| Panel needs no new concept to render it | True — a Network event renders through the exact same `renderEventList`/`renderInspector` contract Runtime/Console events already use | False — the Panel would need to know two events can refer to each other, and decide how (or whether) to show a "pending" state | False — the Panel would need to know an already-rendered row can go stale and require re-rendering, which nothing in the current renderer contract supports |
-| A future Export/Import needs no new concept | True — `serializeEvents()` already handles arbitrary flat `DevLensEvent[]` | False — export/import would need to preserve and validate the correlation between the two halves of a request | False — same problem, plus "what if only the start half was ever exported" |
-| Plugin remains self-contained — its complexity doesn't leak into other packages | Yes — Network owns all of it; Panel, Export, and any future plugin are unaffected | Partial — correlation logic leaks into Panel (rendering a "pending" state), Export/Import (preserving the pairing), and implicitly into documentation every future contributor has to read | No — mutation leaks into Core itself, the one package every other package depends on |
+| Principle                                                                                                                                                  | A (one event, on completion)                                                                                                          | B (two correlated events)                                                                                                                                                                  | C (mutable event)                                                                                                                                           |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Events stay immutable once reported (ADR-0001/0002)                                                                                                        | Unchanged — Core needs no changes                                                                                                     | Unchanged — each of the two events is still immutable individually                                                                                                                         | Violated — the entire point of C is updating an event after report                                                                                          |
+| Store stays append-only (ADR-0004)                                                                                                                         | Unchanged                                                                                                                             | Unchanged                                                                                                                                                                                  | Violated — requires an `update()` Store never had                                                                                                           |
+| One real-world occurrence → one event (the pattern every existing source follows, never written down as its own ADR but true of Runtime and Console alike) | Holds exactly                                                                                                                         | Broken — "these two events are actually one occurrence" is a new concept nothing downstream currently knows how to interpret                                                               | Broken differently — one occurrence, but the event itself isn't a fixed fact anymore                                                                        |
+| Panel needs no new concept to render it                                                                                                                    | True — a Network event renders through the exact same `renderEventList`/`renderInspector` contract Runtime/Console events already use | False — the Panel would need to know two events can refer to each other, and decide how (or whether) to show a "pending" state                                                             | False — the Panel would need to know an already-rendered row can go stale and require re-rendering, which nothing in the current renderer contract supports |
+| A future Export/Import needs no new concept                                                                                                                | True — `serializeEvents()` already handles arbitrary flat `DevLensEvent[]`                                                            | False — export/import would need to preserve and validate the correlation between the two halves of a request                                                                              | False — same problem, plus "what if only the start half was ever exported"                                                                                  |
+| Plugin remains self-contained — its complexity doesn't leak into other packages                                                                            | Yes — Network owns all of it; Panel, Export, and any future plugin are unaffected                                                     | Partial — correlation logic leaks into Panel (rendering a "pending" state), Export/Import (preserving the pairing), and implicitly into documentation every future contributor has to read | No — mutation leaks into Core itself, the one package every other package depends on                                                                        |
 
 Read as a whole, the table makes something visible that a prose
 recommendation alone doesn't: **Candidate A isn't the option chosen
 because it's the easiest to implement — it's the only one of the
 three that doesn't ask any other part of DevLens to learn something
 new.** B and C don't just cost more to build; they cost every
-*downstream* consumer (Panel today, Import whenever it exists, any
+_downstream_ consumer (Panel today, Import whenever it exists, any
 future consumer of the Store nobody's written yet) something they'd
 otherwise never have needed to know. Put another way: A has the
 smallest architectural blast radius of the three — its complexity
@@ -497,7 +497,7 @@ status code alone.**
 
 This is the option every piece of research above points toward without
 much tension between sources — it's the interception mechanism every
-comparable *observability* tool (as opposed to MSW's *mocking* tool)
+comparable _observability_ tool (as opposed to MSW's _mocking_ tool)
 actually uses, its default data scope matches both Sentry's and
 Datadog's shipped defaults, and its explicit-outcome idea is directly
 backed by three independent sources (OpenTelemetry's spec, and real
@@ -511,7 +511,7 @@ option; DevLens's own existing commitments are why it fits.
 **B. Two correlated events (start + complete).** Would give the Panel
 something to show for in-flight requests, which A cannot. No project
 precedent for "two events, one occurrence" exists anywhere in DevLens
-today, and nothing in the research above suggests a *DevLens user* has
+today, and nothing in the research above suggests a _DevLens user_ has
 asked for in-flight visibility — that need would have to be argued for
 on its own, not adopted because OTel's spans happen to have a
 similar-looking start/end shape for an unrelated reason (distributed
