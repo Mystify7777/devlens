@@ -3,6 +3,7 @@ import { createRuntimePlugin } from "@devlens/runtime";
 import { createConsolePlugin } from "@devlens/console";
 import { createNetworkPlugin } from "@devlens/network";
 import { createPanel } from "@devlens/panel";
+import { mountReactDemo } from "./react-demo";
 
 
 const bus = createEventBus();
@@ -25,6 +26,17 @@ runtime.install();
 consolePlugin.install();
 network.install();
 panel.install();
+
+// React demo (Issue #11): mounted against the same shared `bus` as
+// every other capture source above. `@devlens/react`'s error boundary
+// is not a `Plugin` (no install()/uninstall() — see ADR-0013), so it
+// is mounted directly via React's own render tree instead of the
+// install-order block above. JSX is isolated to `react-demo.tsx`;
+// this file stays plain TypeScript.
+const reactDemoRoot = document.getElementById("react-demo-root");
+if (reactDemoRoot) {
+  mountReactDemo(bus, reactDemoRoot);
+}
 
 // Mirror the event stream to the browser console for development.
 // The embedded Panel remains the primary visualization.
