@@ -135,7 +135,9 @@ its own console error output in production builds, but
 stays intact in every build mode (see ADR-0013 for the full reasoning).
 
 `@devlens/react` captures **client-side React rendering errors only**.
-The boundary captures client-side React rendering errors for DevLens reporting. Its reporting path is guarded when `window` is unavailable, so DevLens does not produce a React error report during server rendering. SSR and React Server Components error capture are outside this package's scope.
+Its reporting path is guarded when `window` is unavailable, so no
+report is produced during server rendering. SSR and React Server
+Components error capture are outside this package's scope.
 
 ---
 
