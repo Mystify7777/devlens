@@ -103,6 +103,40 @@ interface Plugin {
 global to patch, so its own React mount/unmount lifecycle is
 sufficient (see ADR-0013 and its amendment to ADR-0006).
 
+### `@devlens/react` usage
+
+```tsx
+import { createEventBus } from "@devlens/core";
+import { createDevLensErrorBoundary } from "@devlens/react";
+
+const bus = createEventBus(); // the same bus every other capture source reports through
+
+const DevLensErrorBoundary = createDevLensErrorBoundary(bus);
+
+function App() {
+  return (
+    <DevLensErrorBoundary fallback={<p>Something went wrong.</p>}>
+      <YourApplication />
+    </DevLensErrorBoundary>
+  );
+}
+```
+
+`fallback` is optional and entirely caller-owned — if omitted, the
+boundary renders `null` on a caught error rather than any default or
+styled UI. DevLens observes and reports; it never decides what your
+users see.
+
+Alongside the caught `Error`, the boundary reports React's own
+`errorInfo.componentStack` — the component-tree location of the
+failure. This is worth capturing specifically because React minifies
+its own console error output in production builds, but
+`componentStack` is a direct API value, not console output, so it
+stays intact in every build mode (see ADR-0013 for the full reasoning).
+
+`@devlens/react` captures **client-side React rendering errors only**.
+The boundary captures client-side React rendering errors for DevLens reporting. Its reporting path is guarded when `window` is unavailable, so DevLens does not produce a React error report during server rendering. SSR and React Server Components error capture are outside this package's scope.
+
 ---
 
 ## Packages
@@ -114,14 +148,15 @@ sufficient (see ADR-0013 and its amendment to ADR-0006).
 | [`@devlens/console`](./packages/console) | Intercepts `console.log/info/debug/warn/error`                     | ✅     |
 | [`@devlens/panel`](./packages/panel)     | Shadow-DOM overlay that renders events live                        | ✅     |
 | [`@devlens/network`](./packages/network) | Captures Fetch and async XHR requests, classified by outcome       | ✅     |
-| `@devlens/react`                         | Client-only React error boundary reporting caught component errors | ✅     |
+| [`@devlens/react`](./packages/react)     | Client-only React error boundary reporting caught component errors | ✅     |
 
 ### `apps/playground`
 
-A minimal Vite app wiring Core + Runtime + Console + Network + Panel
-together, used to manually verify the whole pipeline. It is
-intentionally not a demo app — just enough UI (a handful of buttons) to
-trigger each capture path and watch a row appear in the Panel overlay.
+A minimal Vite app wiring Core + Runtime + Console + Network + React +
+Panel together, used to manually verify the whole pipeline. It is
+intentionally not a demo app — just enough UI (a handful of buttons and
+a small React component tree) to trigger each capture path and watch a
+row appear in the Panel overlay.
 
 ---
 
