@@ -181,11 +181,18 @@ DevLens overlay.
 ### Other root scripts
 
 ```bash
-pnpm build   # pnpm -r build
-pnpm test    # pnpm -r test
-pnpm lint    # pnpm -r lint
-pnpm clean   # pnpm -r clean
+pnpm build           # pnpm -r build
+pnpm test            # pnpm -r test
+pnpm clean           # pnpm -r clean
+pnpm format          # prettier --write .
+pnpm format:check    # prettier --check .
 ```
+
+No dedicated lint gate exists. TypeScript's `strict` mode (every
+package), the test suite, Prettier, and `git diff --check` are judged
+sufficient for the project's current size and contributor surface —
+see `docs/adr/0014-lint-policy.md` for the decision and what would
+change it.
 
 ---
 
