@@ -2,16 +2,16 @@
 
 A framework-agnostic, embeddable developer diagnostics panel.
 
-DevLens unifies runtime errors, console activity, and network
-requests into a single normalized event stream, displayed live in an
-overlay you drop into any running app — no build config and no framework
-dependency required for the core engine.
+DevLens unifies runtime errors, console activity, network requests,
+and React component errors into a single normalized event stream,
+displayed live in an overlay you drop into any running app — no build
+config and no framework dependency required for the core engine.
 
 > **Engine first. UI second. Everything else is a client.**
 >
-> Runtime and Console capture events. The Event Store retains them. The
-> Panel is just one consumer of that Store — a CLI or a VS Code
-> extension could just as easily read from the same Store.
+> Runtime, Console, Network, and React capture events. The Event Store
+> retains them. The Panel is just one consumer of that Store — a CLI or
+> a VS Code extension could just as easily read from the same Store.
 
 <!--
   TODO: replace with a real screenshot of apps/playground once the
@@ -173,9 +173,10 @@ pnpm --filter @devlens/playground dev
 ```
 
 Open the printed local URL. Click the buttons to trigger a thrown error,
-an unhandled rejection, each console method, and a same-origin
-Fetch/XHR request (success and 404 variants) — each should produce a
-live row in the DevLens overlay.
+an unhandled rejection, each console method, a same-origin Fetch/XHR
+request (success and 404 variants), and the React demo's "Throw inside
+React component" button — each should produce a live row in the
+DevLens overlay.
 
 ### Other root scripts
 
@@ -266,8 +267,9 @@ devlens/
 ```
 
 Tooling is deliberately minimal: plain pnpm workspaces (no Turborepo),
-no ESLint/Prettier/Husky yet — both postponed until the package count
-and contributor surface actually justify them.
+no ESLint/Husky yet — Prettier was added for formatting enforcement;
+both ESLint and Husky remain postponed until the package count and
+contributor surface actually justify them.
 
 ---
 
