@@ -5,6 +5,7 @@ import { createRenderer } from "./renderer";
 import { createToolbar } from "./components/toolbar";
 import { createSearchBox } from "./components/search-box";
 import { createSessionControls } from "./components/session-controls";
+import { createTrigger } from "./components/trigger";
 import { MAX_RENDERED_EVENTS } from "./constants";
 import { applyFilters, createEmptyFilterState, type FilterState } from "./filters";
 import { applySearch } from "./search";
@@ -13,17 +14,19 @@ import { serializeEvents } from "./serialize";
 import { importSession, type ImportResult } from "./import";
 
 /**
- * Panel's public surface, extended by seven seams beyond Plugin:
- * setFilters()/setSearchQuery() (Filtering/Search) and
+ * Panel's public surface, extended by ten seams beyond Plugin:
+ * setFilters()/setSearchQuery() (Filtering/Search),
  * pause()/resume()/clear()/exportEvents()/isPaused() (the operational
- * layer). setFilters()/setSearchQuery() are the "engine becomes
- * load-bearing" steps described in docs/specs/inspection.md's
- * Filtering and Search models. The toolbar and search box (below) are
- * controls — they call setFilters()/setSearchQuery(), never the
- * filtering/search engines directly. Search *presentation* (match
- * highlighting, a distinct "no results" state, a match count) is
- * explicitly not part of this — see inspection.md's Search controls
- * model scope note and ADR-0008's Session 6 amendment.
+ * layer), and hide()/show()/isHidden() (the floating trigger's
+ * visibility toggle, Issue #16). setFilters()/setSearchQuery() are the
+ * "engine becomes load-bearing" steps described in
+ * docs/specs/inspection.md's Filtering and Search models. The toolbar
+ * and search box (below) are controls — they call
+ * setFilters()/setSearchQuery(), never the filtering/search engines
+ * directly. Search *presentation* (match highlighting, a distinct "no
+ * results" state, a match count) is explicitly not part of this — see
+ * inspection.md's Search controls model scope note and ADR-0008's
+ * Session 6 amendment.
  *
  * Keyboard navigation (arrow keys, Home/End) reuses selectEvent()
  * directly — there is deliberately no separate seam for it, since it
@@ -37,6 +40,18 @@ import { importSession, type ImportResult } from "./import";
  * function. isPaused() is a synchronous, read-only query; there is no
  * subscription/observer seam (see that section's "State visibility"
  * decision).
+ *
+ * hide()/show()/isHidden() follow the identical shape: single-funnel
+ * public methods the floating trigger's click handler reuses rather
+ * than duplicating, both idempotent, isHidden() a synchronous
+ * read-only query with no subscription seam — same "State visibility"
+ * precedent isPaused() already established. Hiding never touches
+ * Store contents, selection, filters, search, or subscriptions; it is
+ * strictly a DOM-visibility toggle on the host element overlay.ts
+ * owns (a `data-hidden` attribute paired with a
+ * `:host([data-hidden]) [data-devlens-panel-region]` CSS rule — see
+ * overlay.ts and styles.ts). See docs/specs/inspection.md's Future
+ * extensions and ADR-0008's Non-goals (v1).
  */
 export interface PanelController extends Plugin {
   setFilters(filters: FilterState): void;
@@ -46,6 +61,9 @@ export interface PanelController extends Plugin {
   clear(): void;
   exportEvents(): string;
   isPaused(): boolean;
+  hide(): void;
+  show(): void;
+  isHidden(): boolean;
 }
 
 const NAVIGATION_KEYS: Record<string, NavigationDirection> = {
@@ -60,6 +78,18 @@ export function createPanel(store: EventStore): PanelController {
   let unsubscribe: (() => void) | null = null;
   let overlay: ReturnType<typeof createOverlay> | null = null;
   let renderer: ReturnType<typeof createRenderer> | null = null;
+  let trigger: ReturnType<typeof createTrigger> | null = null;
+  // Panel-local UI state (Issue #16), same family as isPaused above —
+  // not observable/subscribable, not Store state, just "is the Panel
+  // currently visible." Defaults to false (visible) for a fresh
+  // instance. Does NOT survive uninstall(): uninstall() is a genuine
+  // teardown and explicitly resets this to false, so the next
+  // install() is visible by default (see the reinstall test). What it
+  // does survive is a hide() called before the *first* install() —
+  // install()'s sync step below picks up whatever isHidden already is
+  // at that point, since a freshly created overlay is always visible
+  // regardless.
+  let isHidden = false;
   let selectedEvent: DevLensEvent | null = null;
   let filters: FilterState = createEmptyFilterState();
   let searchQuery = "";
@@ -253,6 +283,44 @@ export function createPanel(store: EventStore): PanelController {
     return result;
   }
 
+  // Hide/show (Issue #16) — same pattern as pause()/resume()/isPaused()
+  // above: a single-funnel public method pair plus a synchronous
+  // read-only query, both idempotent, both reused as-is by the
+  // trigger's click handler rather than the trigger having its own
+  // copy of this transition logic. Distinct from uninstall(): the
+  // host stays mounted, nothing is torn down, Store/selection/
+  // filters/search/subscriptions are untouched — see overlay.ts's
+  // hide()/show() docs for the data-hidden attribute + CSS mechanism.
+  function hide() {
+    if (isHidden) return;
+    isHidden = true;
+    overlay?.hide();
+    trigger?.setExpanded(false);
+  }
+
+  function show() {
+    if (!isHidden) return;
+    isHidden = false;
+    overlay?.show();
+    trigger?.setExpanded(true);
+  }
+
+  function getIsHidden() {
+    return isHidden;
+  }
+
+  // The trigger's entire outward communication channel — it has no
+  // idea what "hidden" means beyond "call this when clicked." It
+  // reuses the exact same hide()/show() the public API exposes,
+  // rather than a separate private transition.
+  function handleTriggerClick() {
+    if (isHidden) {
+      show();
+    } else {
+      hide();
+    }
+  }
+
   return {
     install() {
       if (installed) return;
@@ -276,9 +344,43 @@ export function createPanel(store: EventStore): PanelController {
         isPaused: getIsPaused,
         onImport: importFromSession,
       });
+
+      // Each carries data-devlens-panel-region (Issue #16) so
+      // hide()/show() can target "every content region" generically
+      // via styles.ts's :host([data-hidden]) rule, without any of
+      // these three components knowing hide/show exists — same
+      // isolation this codebase already applies in the other
+      // direction (the trigger knows nothing about filtering/search/
+      // the Store). The renderer's own two regions mark themselves
+      // the same way, internally (see renderer.ts).
+      for (const element of [toolbar.element, searchBox.element, sessionControls.element]) {
+        element.setAttribute("data-devlens-panel-region", "");
+      }
+
       overlay.shadowRoot.append(toolbar.element, searchBox.element, sessionControls.element);
 
       renderer = createRenderer(overlay.shadowRoot);
+
+      // The trigger is deliberately NOT given data-devlens-panel-region
+      // — it must stay visible when everything else is hidden, since
+      // it's the only way to reopen the Panel.
+      trigger = createTrigger(handleTriggerClick);
+      trigger.setExpanded(!isHidden);
+      overlay.shadowRoot.appendChild(trigger.element);
+
+      // Sync the freshly-created overlay to any isHidden state that
+      // already existed before this install() call. This matters for
+      // hide() called before the *first* install() (isHidden is true,
+      // but no overlay existed yet to apply it to) — not for a
+      // hide()-then-uninstall()-then-install() cycle, since uninstall()
+      // resets isHidden to false on any genuine teardown (see its
+      // declaration above). A brand-new createOverlay() is always
+      // visible by default, so without this sync, the trigger and
+      // internal state could say "hidden" while the actual DOM stayed
+      // visible.
+      if (isHidden) {
+        overlay.hide();
+      }
 
       updateEventList();
       selectEvent(null);
@@ -346,11 +448,13 @@ export function createPanel(store: EventStore): PanelController {
         overlay = null;
       }
       renderer = null;
+      trigger = null;
       selectedEvent = null;
       filters = createEmptyFilterState();
       searchQuery = "";
       currentVisibleEvents = [];
       isPaused = false;
+      isHidden = false;
       installed = false;
     },
 
@@ -361,5 +465,8 @@ export function createPanel(store: EventStore): PanelController {
     clear,
     exportEvents,
     isPaused: getIsPaused,
+    hide,
+    show,
+    isHidden: getIsHidden,
   };
 }

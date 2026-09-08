@@ -4,6 +4,10 @@ import { createInspector } from "./components/inspector";
 
 /**
  * The renderer owns two named regions within the ShadowRoot it's given
+ * (each also carries a shared `data-devlens-panel-region` marker —
+ * see Issue #16's hide()/show() — so the hide mechanism can target
+ * "every content region" generically without the renderer needing to
+ * know hide/show exists)
  * — the event list and the inspector — and exposes them as independent
  * capabilities rather than a single monolithic render() call.
  *
@@ -55,6 +59,7 @@ export interface Renderer {
 export function createRenderer(shadowRoot: ShadowRoot): Renderer {
   const eventListContainer = document.createElement("div");
   eventListContainer.setAttribute("data-devlens-event-list", "");
+  eventListContainer.setAttribute("data-devlens-panel-region", "");
   // Focusable, so keyboard navigation (docs/specs/inspection.md,
   // Keyboard navigation model) has something to scope arrow-key
   // handling to — Panel checks focus containment before treating a
@@ -63,6 +68,7 @@ export function createRenderer(shadowRoot: ShadowRoot): Renderer {
   eventListContainer.setAttribute("tabindex", "0");
 
   const inspector = createInspector();
+  inspector.element.setAttribute("data-devlens-panel-region", "");
 
   shadowRoot.append(eventListContainer, inspector.element);
 

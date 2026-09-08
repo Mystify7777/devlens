@@ -1875,3 +1875,267 @@ describe("createPanel rendering a network-category event (v0.5.2)", () => {
     panel.uninstall();
   });
 });
+
+// Issue #16: the floating trigger. Covers installation, open/hide/
+// reopen, idempotency, cleanup, reinstall, and accessibility, per that
+// issue's Tests section. Deliberately drives most of this through the
+// real rendered <button> (clickTrigger()) rather than only the
+// PanelController methods, since the trigger's own DOM/accessibility
+// behavior is exactly what's under test — direct hide()/show() calls
+// are used only where the test is specifically about the public
+// method contract itself (idempotency, state after uninstall).
+describe("createPanel floating trigger", () => {
+  function getTrigger(): HTMLButtonElement | null {
+    return getPanelRoot()?.querySelector<HTMLButtonElement>("[data-devlens-trigger]") ?? null;
+  }
+
+  function clickTrigger(): void {
+    getTrigger()?.click();
+  }
+
+  function bodyIsHidden(): boolean {
+    return (
+      document.querySelector("[data-devlens-panel-host]")?.hasAttribute("data-hidden") ?? false
+    );
+  }
+
+  beforeEach(() => {
+    idCounter = 0;
+  });
+
+  describe("installation", () => {
+    it("installing Panel creates exactly one functioning trigger", () => {
+      const panel = createPanel(createFakeStore());
+      panel.install();
+
+      const triggers = getPanelRoot()?.querySelectorAll("[data-devlens-trigger]");
+      expect(triggers).toHaveLength(1);
+      expect(getTrigger()?.tagName).toBe("BUTTON");
+
+      panel.uninstall();
+    });
+
+    it("the Panel body is visible by default after install", () => {
+      const panel = createPanel(createFakeStore());
+      panel.install();
+
+      expect(bodyIsHidden()).toBe(false);
+      expect(panel.isHidden()).toBe(false);
+
+      panel.uninstall();
+    });
+
+    it("hide() called before the first install() is honored once installed", () => {
+      // Regression: install() previously always created a visible
+      // overlay regardless of any isHidden state set beforehand,
+      // leaving isHidden===true and the trigger at
+      // aria-expanded="false" while the overlay itself stayed
+      // visible. install() must sync a fresh overlay to any
+      // already-existing isHidden state.
+      const panel = createPanel(createFakeStore());
+
+      panel.hide();
+      panel.install();
+
+      expect(panel.isHidden()).toBe(true);
+      expect(bodyIsHidden()).toBe(true);
+      expect(getTrigger()?.getAttribute("aria-expanded")).toBe("false");
+
+      // And the trigger must still be able to reveal it afterward.
+      clickTrigger();
+
+      expect(panel.isHidden()).toBe(false);
+      expect(bodyIsHidden()).toBe(false);
+      expect(getTrigger()?.getAttribute("aria-expanded")).toBe("true");
+
+      panel.uninstall();
+    });
+  });
+
+  describe("hiding", () => {
+    it("clicking the trigger hides the Panel body without clearing Store contents", () => {
+      const store = createFakeStore([makeEvent({ title: "Persists Through Hide" })]);
+      const panel = createPanel(store);
+      panel.install();
+
+      clickTrigger();
+
+      expect(panel.isHidden()).toBe(true);
+      expect(bodyIsHidden()).toBe(true);
+      expect(store.getAll()).toHaveLength(1);
+      expect(store.getAll()[0].title).toBe("Persists Through Hide");
+
+      panel.uninstall();
+    });
+
+    it("hide() does not unsubscribe from the Store", () => {
+      const store = createFakeStore();
+      const panel = createPanel(store);
+      panel.install();
+
+      panel.hide();
+
+      expect(store.getSubscriberCount()).toBe(1);
+
+      panel.uninstall();
+    });
+
+    it("hide() is idempotent — calling it twice leaves state unchanged", () => {
+      const panel = createPanel(createFakeStore());
+      panel.install();
+
+      panel.hide();
+      panel.hide();
+
+      expect(panel.isHidden()).toBe(true);
+      expect(bodyIsHidden()).toBe(true);
+
+      panel.uninstall();
+    });
+  });
+
+  describe("reopening", () => {
+    it("clicking the trigger again reopens the Panel and reflects current Store state", () => {
+      const store = createFakeStore([makeEvent({ title: "Before Hide" })]);
+      const panel = createPanel(store);
+      panel.install();
+
+      clickTrigger(); // hide
+      store.add(makeEvent({ title: "Added While Hidden" }));
+      clickTrigger(); // reopen
+
+      expect(panel.isHidden()).toBe(false);
+      expect(bodyIsHidden()).toBe(false);
+      expect(renderedTitles()).toEqual(["Before Hide", "Added While Hidden"]);
+
+      panel.uninstall();
+    });
+
+    it("show() is idempotent — calling it twice leaves state unchanged", () => {
+      const panel = createPanel(createFakeStore());
+      panel.install();
+
+      panel.show(); // already shown by default
+
+      expect(panel.isHidden()).toBe(false);
+      expect(bodyIsHidden()).toBe(false);
+
+      panel.uninstall();
+    });
+
+    it("reopening does not create duplicate DOM nodes or duplicate subscriptions", () => {
+      const store = createFakeStore([makeEvent({ title: "Only One" })]);
+      const panel = createPanel(store);
+      panel.install();
+
+      clickTrigger();
+      clickTrigger();
+      clickTrigger();
+      clickTrigger();
+
+      expect(getPanelRoot()?.querySelectorAll("[data-devlens-trigger]")).toHaveLength(1);
+      expect(getPanelRoot()?.querySelectorAll("[data-devlens-event-list]")).toHaveLength(1);
+      expect(renderedTitles()).toEqual(["Only One"]);
+      expect(store.getSubscriberCount()).toBe(1);
+
+      panel.uninstall();
+    });
+  });
+
+  describe("cleanup", () => {
+    it("uninstall removes the trigger along with the rest of the Panel UI", () => {
+      const panel = createPanel(createFakeStore());
+      panel.install();
+      panel.uninstall();
+
+      expect(document.querySelector("[data-devlens-trigger]")).toBeNull();
+      expect(document.querySelector("[data-devlens-panel-host]")).toBeNull();
+    });
+
+    it("uninstall cleans up the Store subscription even if the Panel was hidden", () => {
+      const store = createFakeStore();
+      const panel = createPanel(store);
+      panel.install();
+      panel.hide();
+      panel.uninstall();
+
+      expect(store.getSubscriberCount()).toBe(0);
+    });
+
+    it("isHidden() resets to false after uninstall", () => {
+      const panel = createPanel(createFakeStore());
+      panel.install();
+      panel.hide();
+      panel.uninstall();
+
+      expect(panel.isHidden()).toBe(false);
+    });
+  });
+
+  describe("reinstall", () => {
+    it("reinstalling after uninstall creates exactly one functioning trigger, visible by default", () => {
+      const panel = createPanel(createFakeStore());
+      panel.install();
+      panel.hide();
+      panel.uninstall();
+
+      panel.install();
+
+      expect(getPanelRoot()?.querySelectorAll("[data-devlens-trigger]")).toHaveLength(1);
+      expect(panel.isHidden()).toBe(false);
+      expect(bodyIsHidden()).toBe(false);
+
+      panel.uninstall();
+    });
+  });
+
+  describe("accessibility", () => {
+    it("is a native, non-disabled <button>, so it preserves built-in Enter/Space keyboard activation", () => {
+      // jsdom does not synthesize a click from a real Enter/Space
+      // keypress the way an actual browser does, so this test
+      // honestly verifies the precondition that makes that native
+      // browser behavior apply — a real <button type="button">, not a
+      // <div> with a click handler — rather than claiming to exercise
+      // keyboard activation itself. See trigger.test.ts for the same
+      // reasoning at the component level.
+      const panel = createPanel(createFakeStore());
+      panel.install();
+
+      const trigger = getTrigger();
+      expect(trigger?.tagName).toBe("BUTTON");
+      expect(trigger?.getAttribute("type")).toBe("button");
+      expect(trigger?.disabled).toBe(false);
+      expect(trigger?.tabIndex).not.toBe(-1);
+
+      // Its click handler (what native keyboard activation would
+      // ultimately invoke) is verified separately, via a real click,
+      // in the "reopening"/"hiding" describe blocks above.
+
+      panel.uninstall();
+    });
+
+    it("aria-expanded reflects the Panel's visibility state through a full hide/show cycle", () => {
+      const panel = createPanel(createFakeStore());
+      panel.install();
+
+      expect(getTrigger()?.getAttribute("aria-expanded")).toBe("true");
+
+      clickTrigger();
+      expect(getTrigger()?.getAttribute("aria-expanded")).toBe("false");
+
+      clickTrigger();
+      expect(getTrigger()?.getAttribute("aria-expanded")).toBe("true");
+
+      panel.uninstall();
+    });
+
+    it("the trigger has a non-empty accessible name", () => {
+      const panel = createPanel(createFakeStore());
+      panel.install();
+
+      expect(getTrigger()?.textContent?.trim()).toBeTruthy();
+
+      panel.uninstall();
+    });
+  });
+});

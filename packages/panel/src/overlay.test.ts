@@ -62,4 +62,49 @@ describe("createOverlay", () => {
 
     expect(first.shadowRoot).not.toBe(second.shadowRoot);
   });
+
+  it("host is visible by default (no data-hidden attribute)", () => {
+    const overlay = createOverlay();
+    expect(overlay.shadowRoot.host.hasAttribute("data-hidden")).toBe(false);
+  });
+
+  it("hide() sets data-hidden on the host", () => {
+    const overlay = createOverlay();
+    overlay.hide();
+    expect(overlay.shadowRoot.host.hasAttribute("data-hidden")).toBe(true);
+  });
+
+  it("show() removes data-hidden from the host", () => {
+    const overlay = createOverlay();
+    overlay.hide();
+    overlay.show();
+    expect(overlay.shadowRoot.host.hasAttribute("data-hidden")).toBe(false);
+  });
+
+  it("hide() is idempotent-safe to call repeatedly", () => {
+    const overlay = createOverlay();
+    overlay.hide();
+    overlay.hide();
+    expect(overlay.shadowRoot.host.hasAttribute("data-hidden")).toBe(true);
+  });
+
+  it("show() is idempotent-safe to call repeatedly", () => {
+    const overlay = createOverlay();
+    overlay.show();
+    overlay.show();
+    expect(overlay.shadowRoot.host.hasAttribute("data-hidden")).toBe(false);
+  });
+
+  it("hide()/show() do not detach the host from the document", () => {
+    const overlay = createOverlay();
+    overlay.mount();
+
+    overlay.hide();
+    expect(getHost()).not.toBeNull();
+
+    overlay.show();
+    expect(getHost()).not.toBeNull();
+
+    overlay.unmount();
+  });
 });
