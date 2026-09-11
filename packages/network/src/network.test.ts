@@ -327,6 +327,82 @@ describe("createNetworkPlugin end-to-end fetch reporting (Step 3C)", () => {
 // directly the way xhr-interceptor.test.ts does — this is what proves
 // the interceptor, classifier, and normalizer are wired correctly
 // together, not just individually correct.
+//
+// Issue #17 / ADR-0010 amendment: normalizeCapturedUrl() is unit-
+// tested exhaustively in normalize-url.test.ts. These tests exist to
+// prove it's actually wired into the real end-to-end path for both
+// capture mechanisms — that a query token doesn't survive all the way
+// out to a reported event's metadata.url, not just that the pure
+// function itself redacts it in isolation.
+describe("createNetworkPlugin end-to-end URL redaction and normalization (Issue #17)", () => {
+  it("redacts a query token in a reported fetch event's metadata.url and title", async () => {
+    window.fetch = vi.fn(
+      async () => new Response(null, { status: 200 })
+    ) as unknown as typeof fetch;
+
+    const bus = createEventBus();
+    const network = createNetworkPlugin(bus);
+    network.install();
+
+    await window.fetch("https://api.example.com/login?token=abc123");
+
+    const event = bus.getEvents()[0];
+    expect(event.metadata).toMatchObject({ url: "https://api.example.com/login?token=***" });
+    expect(event.title).toContain("token=***");
+    expect(event.title).not.toContain("abc123");
+
+    network.uninstall();
+  });
+
+  it("strips a fragment and omits the default port in a reported fetch event", async () => {
+    window.fetch = vi.fn(
+      async () => new Response(null, { status: 200 })
+    ) as unknown as typeof fetch;
+
+    const bus = createEventBus();
+    const network = createNetworkPlugin(bus);
+    network.install();
+
+    await window.fetch("https://api.example.com:443/users#section-2");
+
+    expect(bus.getEvents()[0].metadata).toMatchObject({
+      url: "https://api.example.com/users",
+    });
+
+    network.uninstall();
+  });
+
+  describe("XHR path", () => {
+    beforeEach(() => {
+      XMLHttpRequest.prototype.open = vi.fn();
+      XMLHttpRequest.prototype.send = vi.fn();
+    });
+
+    function setStatus(xhr: XMLHttpRequest, status: number): void {
+      Object.defineProperty(xhr, "status", { value: status, configurable: true });
+    }
+
+    it("redacts a query token in a reported XHR event's metadata.url", () => {
+      const bus = createEventBus();
+      const network = createNetworkPlugin(bus);
+      network.install();
+
+      const xhr = new XMLHttpRequest();
+      xhr.open("GET", "https://api.example.com/login?token=abc123");
+      xhr.send();
+      setStatus(xhr, 200);
+      xhr.dispatchEvent(new Event("load"));
+      xhr.dispatchEvent(new Event("loadend"));
+
+      expect(bus.getEvents()[0].metadata).toMatchObject({
+        url: "https://api.example.com/login?token=***",
+      });
+
+      network.uninstall();
+    });
+  });
+});
+
 describe("createNetworkPlugin end-to-end XHR reporting (Step 4B)", () => {
   // Unlike xhr-interceptor.test.ts's unit tests (which stub open/send
   // directly), these tests exercise createNetworkPlugin's own

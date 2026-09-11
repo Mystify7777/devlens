@@ -34,6 +34,8 @@
  * would change the original's identity for no benefit — an
  * unnecessary deviation from "capture less, change nothing."
  */
+import { normalizeCapturedUrl } from "../normalize-url";
+
 export type FetchSettleInfo =
   | {
       state: "fulfilled";
@@ -68,6 +70,15 @@ export interface RequestDescriptor {
  * provided `init`. Deliberately simple: this resolves what was
  * requested, it doesn't attempt to replicate the fetch spec's full
  * Request-construction algorithm for its own sake.
+ *
+ * `url` is passed through normalizeCapturedUrl() (Issue #17 / ADR-0010
+ * amendment) regardless of which branch produced it — previously, a
+ * `Request` input got the Fetch spec's own fragment-stripping for
+ * free (`Request.url` already strips it) while a plain string
+ * argument didn't, an inconsistency depending on which overload the
+ * caller happened to use. Normalizing both branches through the same
+ * function removes that inconsistency rather than continuing to rely
+ * on it.
  */
 function resolveRequestDescriptor(args: Parameters<typeof fetch>): RequestDescriptor {
   const [input, init] = args;
@@ -85,7 +96,7 @@ function resolveRequestDescriptor(args: Parameters<typeof fetch>): RequestDescri
     method = init.method;
   }
 
-  return { method: method.toUpperCase(), url };
+  return { method: method.toUpperCase(), url: normalizeCapturedUrl(url, document.baseURI) };
 }
 
 export function createFetchInterceptor(

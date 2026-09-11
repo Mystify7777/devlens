@@ -245,3 +245,145 @@ reason this ADR was wrong to accept the trade today.
   ADR-0005 (Runtime — the "don't overwrite globals" principle this ADR
   deliberately departs from and explains why), ADR-0006 (Plugin
   contract).
+
+## Amendment (Issue #17): URL contract — a bug fix, a resolved question, and a question that stays open
+
+This amendment does three distinct things, kept deliberately separate
+because they're different in kind and were at risk of being read as
+one undifferentiated "URL work":
+
+### 1. A correction, not a decision: query-value redaction was never implemented
+
+The Decision section above states, and has stated since this ADR was
+Accepted, that "Query parameter values are redacted by default
+(`?token=***`), while parameter names are preserved." Issue #17's
+investigation found this was never actually built — `resolveRequestDescriptor()`
+(fetch) and `open()`'s descriptor capture (XHR) both passed the raw,
+unredacted URL straight through, and `types.ts`'s own doc comment
+("Already redacted by the capture layer") and a normalizer test
+("preserves the URL exactly — no redaction happens here") both
+asserted a behavior that didn't exist. This is not a new architectural
+decision — the decision was already Accepted, above — it's a
+correction of an implementation gap against it, and is treated as a
+bug fix rather than something requiring fresh justification.
+
+Every non-empty query parameter value is now replaced with `***`;
+parameter names are always preserved. A parameter with no value at all
+(`?debug`, a common flag pattern) is left empty rather than forced to
+`***` — there is nothing to redact, and marking it anyway would
+misrepresent an already-empty value as hidden data. This refinement
+wasn't specified in the original Decision text and is recorded here as
+the concrete rule that text implies.
+
+### 2. Newly resolved: canonical URL semantics (previously an Open question)
+
+The "URL identity / normalization" open question above is resolved,
+in part: `url` now means the request's **canonicalized, redacted**
+form — one representation, not the raw byte-exact input and not two
+parallel fields. Canonicalization is: parse via `new URL(raw, base)`
+(`base` is `document.baseURI`, matching how the browser itself
+resolves both a relative `fetch()` string argument and XHR's `url`
+argument), clear the fragment, and read back `.href`.
+
+This is safe to do automatically, with zero application-specific
+route knowledge, because every individual transformation it performs
+is either browser-spec-guaranteed or a documented, verified web
+platform fact, not a DevLens judgment call:
+
+- **Scheme and hostname are lowercased** — the WHATWG URL parser's own
+  normative parsing/serialization behavior, not something this package
+  computes itself. Verified empirically (`new URL("HTTPS://API.Example.COM/Path").href`
+  → `"https://api.example.com/Path"`) — note the path segment's own
+  casing is untouched, correctly, since path casing is meaningful and
+  the URL spec never normalizes it.
+- **Unsafe literal characters get properly percent-encoded** when
+  parsed (a literal space in the input becomes `%20`, for instance).
+  This is real, deterministic encoding of unsafe input, not
+  normalization of encoding that's already present — verified
+  empirically that already-percent-encoded sequences are left
+  completely untouched by `.href` (`%61` does not become `a`, and
+  `%2f` does not become `%2F`). An earlier draft of this amendment
+  claimed the parser also canonicalizes existing percent-encoding;
+  that claim was wrong (conflated with a third-party URL library's own
+  explicit `.normalize()` step, not native `URL` behavior) and is
+  corrected here rather than left in place.
+- **The default port for the URL's scheme is omitted** — confirmed
+  directly against MDN's `URL.port` documentation (empty string is
+  returned, and the port doesn't appear in `.href`, whenever the port
+  matches the scheme's default: 80/http, 443/https, 80/ws, 443/wss,
+  21/ftp).
+- **The fragment is cleared explicitly, not left to chance.** Verified
+  against real browser bug history (Mozilla bug 1110476, WebKit bug 160593) that the Fetch spec requires `Request`/`Response` URL
+  getters to strip the fragment automatically, on the grounds that a
+  fragment is by definition never transmitted to the server as part of
+  an HTTP request — reporting one in a _network request_ event would
+  describe something that was never sent. This was previously
+  inconsistent in this package's own code: `resolveRequestDescriptor()`
+  only got fragment-stripping for free when the caller passed a
+  `Request` object (because `Request.url` already strips it per spec);
+  a plain string argument (`fetch("/x#y")`) kept the fragment, since no
+  parsing was ever applied to that branch. Explicit `.hash = ""`
+  removes this inconsistency rather than continuing to depend on which
+  overload of `fetch()`'s first argument a caller happened to use.
+
+**Trailing slashes are deliberately not touched** — `/users` and
+`/users/` are not asserted equivalent anywhere in the URL spec, and
+treating them as the same requires knowing whether a given
+application's router treats them as the same, which is exactly the
+kind of application-specific knowledge this section's other four
+transformations don't require. This stays exactly as undecided/unsafe
+as path-parameter grouping, below — it's a routing-semantics question,
+not a syntactic one.
+
+Two small, accepted syntactic side effects of implementing this via
+`URL`/`URLSearchParams` rather than raw string manipulation, worth
+naming so they're not mistaken for bugs later: `URLSearchParams`
+serializes spaces as `+` (the `application/x-www-form-urlencoded`
+convention) even if the original query string used `%20`; and it does
+not distinguish a bare flag (`?debug`) from an explicit empty value
+(`?debug=`) — both round-trip as `debug=`. Both are syntactic
+equivalence classes, not semantic changes, and match the same
+"safe because it's spec-level, not app-level" reasoning as everything
+else in this section.
+
+### 3. Still open, restated rather than silently dropped: application-specific endpoint identity
+
+Whether `/users/123` and `/users/456` (or `/products?page=1` and
+`/products?page=2`) should ever collapse into one conceptual endpoint
+remains **undecided, on purpose** — Issue #17's investigation did not
+find a second real consumer for this (checked Panel, Export, and
+Import; none group, aggregate, or otherwise treat multiple URLs as one
+logical thing today), which is the same bar every other deferred
+abstraction in this project has been held to. Per Sentry's own
+precedent (already cited in the original research this ADR draws
+from), if this is ever built, it should be an explicit, host-app-
+configured hook using the application's own route knowledge — DevLens
+inferring route templates automatically was never a live option and
+still isn't. This section of the original Open questions list is not
+resolved by this amendment; it's restated so a future reader doesn't
+mistake "the ADR got a URL amendment" for "the endpoint-grouping
+question got answered too."
+
+### Compatibility
+
+`CapturedRequest.url` and the reported event's `metadata.url` remain a
+plain string — no shape/type change, so `@devlens/panel`'s Import
+schema validation (which checks field shapes, not the semantic content
+of a string) needs no changes. Only the _value_ changes going forward:
+newly captured events are canonicalized and properly redacted;
+previously exported sessions containing the old, unredacted/
+uncanonicalized values remain valid to import, the same as any other
+bug fix — DevLens doesn't retroactively rewrite historical data, and
+nothing about Session Import's contract asked it to.
+
+### What this amendment does not touch
+
+No changes to Core, `@devlens/panel`, Export, or Import. No changes to
+`network.ts`, `types.ts`, or `network-normalizer.ts` — all three
+already documented (accurately, as it turns out, just not truthfully
+about the implementation) that redaction and URL decisions happen
+upstream in the capture layer; this amendment is what makes that
+already-stated architecture true, not a change to it. Outcome
+classification, severity mapping, redirect-hop handling, and Content-
+Type/size capture — every other Open question above — are unaffected
+and remain exactly as open as before this amendment.

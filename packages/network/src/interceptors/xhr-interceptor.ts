@@ -33,6 +33,8 @@
  * its own request — there is no shared mutable state for a later
  * `open()` to corrupt.
  */
+import { normalizeCapturedUrl } from "../normalize-url";
+
 export interface XhrRequestDescriptor {
   method: string;
   url: string;
@@ -93,7 +95,13 @@ export function installXhrInterceptor(onSettle?: (info: XhrSettleInfo) => void):
     // nothing for a call the browser itself rejected."
     pendingDescriptors.set(this, {
       method: String(method),
-      url: String(url),
+      // normalizeCapturedUrl() (Issue #17 / ADR-0010 amendment):
+      // canonicalizes and redacts, same shared function
+      // fetch-interceptor.ts uses. XHR's url argument is resolved
+      // relative to the document per the XHR spec, same as fetch's
+      // string-argument overload — document.baseURI is the correct
+      // base for both.
+      url: normalizeCapturedUrl(String(url), document.baseURI),
       // open(method, url) (two-arg form) implies async per the spec;
       // async is only false if explicitly passed as false.
       async: async !== false,
