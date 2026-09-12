@@ -34,3 +34,5 @@ coverage/
 
 # TypeScript build info
 *.tsbuildinfo
+
+assist/
