@@ -403,6 +403,345 @@ describe("createNetworkPlugin end-to-end URL redaction and normalization (Issue 
   });
 });
 
+// Issue #18 / ADR-0010 amendment: contentType/contentLength.
+// normalize-url.test.ts and parse-content-length.test.ts already
+// exhaustively unit-test URL redaction and Content-Length parsing in
+// isolation. These tests exist to prove both are actually wired into
+// the real end-to-end path for both capture mechanisms, matching the
+// same reasoning the Issue #17 block above already established.
+describe("createNetworkPlugin end-to-end response metadata (Issue #18)", () => {
+  describe("Fetch path", () => {
+    it("captures Content-Type and Content-Length when both are present", async () => {
+      window.fetch = vi.fn(
+        async () =>
+          new Response(null, {
+            status: 200,
+            headers: { "Content-Type": "application/json", "Content-Length": "42" },
+          })
+      ) as unknown as typeof fetch;
+
+      const bus = createEventBus();
+      const network = createNetworkPlugin(bus);
+      network.install();
+
+      await window.fetch("https://api.example.com/users");
+
+      expect(bus.getEvents()[0].metadata).toMatchObject({
+        contentType: "application/json",
+        contentLength: 42,
+      });
+
+      network.uninstall();
+    });
+
+    it("captures Content-Length: 0 as the number 0, not null", async () => {
+      // The explicit regression guard every reviewer asked for by
+      // name — not folded into the "both present" test above, so a
+      // truthy-check regression can't hide inside a generic assertion.
+      window.fetch = vi.fn(
+        async () => new Response(null, { status: 204, headers: { "Content-Length": "0" } })
+      ) as unknown as typeof fetch;
+
+      const bus = createEventBus();
+      const network = createNetworkPlugin(bus);
+      network.install();
+
+      await window.fetch("https://api.example.com/users");
+
+      expect(bus.getEvents()[0].metadata?.contentLength).toBe(0);
+
+      network.uninstall();
+    });
+
+    it("reports null for both fields when neither header is present", async () => {
+      window.fetch = vi.fn(
+        async () => new Response(null, { status: 200 })
+      ) as unknown as typeof fetch;
+
+      const bus = createEventBus();
+      const network = createNetworkPlugin(bus);
+      network.install();
+
+      await window.fetch("https://api.example.com/users");
+
+      expect(bus.getEvents()[0].metadata).toMatchObject({
+        contentType: null,
+        contentLength: null,
+      });
+
+      network.uninstall();
+    });
+
+    it("reports null for both fields on an opaque response", async () => {
+      window.fetch = vi.fn(async () => {
+        // Same simulation approach fetch-outcome.test.ts already
+        // uses — jsdom/Node's Response can't construct a genuinely
+        // opaque response directly (that's a fetch-internal filtering
+        // step), so this constructs the observable shape: status 0,
+        // matching type, and — critically for this test — no headers
+        // were ever added to this Response literal, matching a real
+        // opaque response's empty, immutable headers.
+        const response = new Response(null, { status: 200 });
+        Object.defineProperty(response, "status", { value: 0 });
+        Object.defineProperty(response, "type", { value: "opaque" });
+        return response;
+      }) as unknown as typeof fetch;
+
+      const bus = createEventBus();
+      const network = createNetworkPlugin(bus);
+      network.install();
+
+      await window.fetch("https://api.example.com/tracking-pixel");
+
+      expect(bus.getEvents()[0].metadata).toMatchObject({
+        contentType: null,
+        contentLength: null,
+      });
+
+      network.uninstall();
+    });
+
+    it("reports null for both fields when the request is rejected (no response at all)", async () => {
+      window.fetch = vi.fn(() =>
+        Promise.reject(new TypeError("Failed to fetch"))
+      ) as unknown as typeof fetch;
+
+      const bus = createEventBus();
+      const network = createNetworkPlugin(bus);
+      network.install();
+
+      await window.fetch("https://api.example.com/users").catch(() => {
+        // the caller's own rejection — irrelevant to this assertion.
+      });
+
+      expect(bus.getEvents()[0].metadata).toMatchObject({
+        contentType: null,
+        contentLength: null,
+      });
+
+      network.uninstall();
+    });
+
+    it("still captures metadata on an HTTP error response (404) — failure and metadata availability are independent", async () => {
+      window.fetch = vi.fn(
+        async () =>
+          new Response(null, {
+            status: 404,
+            headers: { "Content-Type": "application/problem+json", "Content-Length": "88" },
+          })
+      ) as unknown as typeof fetch;
+
+      const bus = createEventBus();
+      const network = createNetworkPlugin(bus);
+      network.install();
+
+      await window.fetch("https://api.example.com/users/999");
+
+      expect(bus.getEvents()[0].metadata).toMatchObject({
+        outcome: "http-error",
+        contentType: "application/problem+json",
+        contentLength: 88,
+      });
+
+      network.uninstall();
+    });
+
+    it("reflects only the final response's metadata after a followed redirect", async () => {
+      // fetch()'s resolved Response, with the default redirect:
+      // "follow", already represents the final response after all
+      // hops — no redirect-specific handling exists or is needed here,
+      // this test just confirms that remains true for these two
+      // fields specifically.
+      window.fetch = vi.fn(async () => {
+        const response = new Response(null, {
+          status: 200,
+          headers: { "Content-Type": "text/html", "Content-Length": "10" },
+        });
+        Object.defineProperty(response, "redirected", { value: true });
+        Object.defineProperty(response, "url", {
+          value: "https://api.example.com/final-destination",
+        });
+        return response;
+      }) as unknown as typeof fetch;
+
+      const bus = createEventBus();
+      const network = createNetworkPlugin(bus);
+      network.install();
+
+      await window.fetch("https://api.example.com/original-link");
+
+      expect(bus.getEvents()[0].metadata).toMatchObject({
+        contentType: "text/html",
+        contentLength: 10,
+      });
+
+      network.uninstall();
+    });
+  });
+
+  describe("XHR path", () => {
+    beforeEach(() => {
+      XMLHttpRequest.prototype.open = vi.fn();
+      XMLHttpRequest.prototype.send = vi.fn();
+    });
+
+    function setStatus(xhr: XMLHttpRequest, status: number): void {
+      Object.defineProperty(xhr, "status", { value: status, configurable: true });
+    }
+
+    function stubResponseHeaders(xhr: XMLHttpRequest, headers: Record<string, string>): void {
+      xhr.getResponseHeader = vi.fn(
+        (name: string) => headers[name] ?? null
+      ) as typeof xhr.getResponseHeader;
+    }
+
+    it("captures Content-Type and Content-Length when both are present", () => {
+      const bus = createEventBus();
+      const network = createNetworkPlugin(bus);
+      network.install();
+
+      const xhr = new XMLHttpRequest();
+      xhr.open("GET", "https://api.example.com/users");
+      xhr.send();
+      setStatus(xhr, 200);
+      stubResponseHeaders(xhr, { "Content-Type": "application/json", "Content-Length": "42" });
+      xhr.dispatchEvent(new Event("load"));
+      xhr.dispatchEvent(new Event("loadend"));
+
+      expect(bus.getEvents()[0].metadata).toMatchObject({
+        contentType: "application/json",
+        contentLength: 42,
+      });
+
+      network.uninstall();
+    });
+
+    it("captures Content-Length: 0 as the number 0, not null", () => {
+      const bus = createEventBus();
+      const network = createNetworkPlugin(bus);
+      network.install();
+
+      const xhr = new XMLHttpRequest();
+      xhr.open("GET", "https://api.example.com/users");
+      xhr.send();
+      setStatus(xhr, 204);
+      stubResponseHeaders(xhr, { "Content-Length": "0" });
+      xhr.dispatchEvent(new Event("load"));
+      xhr.dispatchEvent(new Event("loadend"));
+
+      expect(bus.getEvents()[0].metadata?.contentLength).toBe(0);
+
+      network.uninstall();
+    });
+
+    it("reports null for both fields when neither header is present", () => {
+      const bus = createEventBus();
+      const network = createNetworkPlugin(bus);
+      network.install();
+
+      const xhr = new XMLHttpRequest();
+      xhr.open("GET", "https://api.example.com/users");
+      xhr.send();
+      setStatus(xhr, 200);
+      stubResponseHeaders(xhr, {});
+      xhr.dispatchEvent(new Event("load"));
+      xhr.dispatchEvent(new Event("loadend"));
+
+      expect(bus.getEvents()[0].metadata).toMatchObject({
+        contentType: null,
+        contentLength: null,
+      });
+
+      network.uninstall();
+    });
+
+    it("reports null for both fields on a network error (no opaque-equivalent case exists for XHR)", () => {
+      const bus = createEventBus();
+      const network = createNetworkPlugin(bus);
+      network.install();
+
+      const xhr = new XMLHttpRequest();
+      xhr.open("GET", "https://api.example.com/users");
+      xhr.send();
+      stubResponseHeaders(xhr, {});
+      xhr.dispatchEvent(new Event("error"));
+      xhr.dispatchEvent(new Event("loadend"));
+
+      expect(bus.getEvents()[0].metadata).toMatchObject({
+        contentType: null,
+        contentLength: null,
+      });
+
+      network.uninstall();
+    });
+
+    it("reports null for both fields on abort", () => {
+      const bus = createEventBus();
+      const network = createNetworkPlugin(bus);
+      network.install();
+
+      const xhr = new XMLHttpRequest();
+      xhr.open("GET", "https://api.example.com/users");
+      xhr.send();
+      stubResponseHeaders(xhr, {});
+      xhr.dispatchEvent(new Event("abort"));
+      xhr.dispatchEvent(new Event("loadend"));
+
+      expect(bus.getEvents()[0].metadata).toMatchObject({
+        contentType: null,
+        contentLength: null,
+      });
+
+      network.uninstall();
+    });
+
+    it("reports null for both fields on timeout", () => {
+      const bus = createEventBus();
+      const network = createNetworkPlugin(bus);
+      network.install();
+
+      const xhr = new XMLHttpRequest();
+      xhr.open("GET", "https://api.example.com/users");
+      xhr.send();
+      stubResponseHeaders(xhr, {});
+      xhr.dispatchEvent(new Event("timeout"));
+      xhr.dispatchEvent(new Event("loadend"));
+
+      expect(bus.getEvents()[0].metadata).toMatchObject({
+        contentType: null,
+        contentLength: null,
+      });
+
+      network.uninstall();
+    });
+
+    it("still captures metadata on an HTTP error response (404) — failure and metadata availability are independent", () => {
+      const bus = createEventBus();
+      const network = createNetworkPlugin(bus);
+      network.install();
+
+      const xhr = new XMLHttpRequest();
+      xhr.open("GET", "https://api.example.com/users/999");
+      xhr.send();
+      setStatus(xhr, 404);
+      stubResponseHeaders(xhr, {
+        "Content-Type": "application/problem+json",
+        "Content-Length": "88",
+      });
+      xhr.dispatchEvent(new Event("load"));
+      xhr.dispatchEvent(new Event("loadend"));
+
+      expect(bus.getEvents()[0].metadata).toMatchObject({
+        outcome: "http-error",
+        contentType: "application/problem+json",
+        contentLength: 88,
+      });
+
+      network.uninstall();
+    });
+  });
+});
+
 describe("createNetworkPlugin end-to-end XHR reporting (Step 4B)", () => {
   // Unlike xhr-interceptor.test.ts's unit tests (which stub open/send
   // directly), these tests exercise createNetworkPlugin's own

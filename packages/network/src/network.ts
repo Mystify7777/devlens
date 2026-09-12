@@ -4,6 +4,7 @@ import { installXhrInterceptor, type XhrSettleInfo } from "./interceptors/xhr-in
 import { classifyFetchOutcome } from "./classifiers/fetch-outcome";
 import { classifyXhrOutcome } from "./classifiers/xhr-outcome";
 import { normalizeNetworkEvent } from "./normalizers/network-normalizer";
+import { parseContentLength } from "./parse-content-length";
 import type { CapturedRequest } from "./types";
 
 /**
@@ -55,6 +56,20 @@ export function createNetworkPlugin(bus: EventBus): Plugin {
       duration: info.duration,
       outcome,
       severity,
+      // Issue #18 / ADR-0010 amendment: extracted here, not in
+      // fetch-interceptor.ts — the Response object already flows
+      // through untouched to this exact point, which already has
+      // legitimate access to it. Only a "fulfilled" settlement has a
+      // response to read headers from; null otherwise, matching
+      // `status`'s existing null-when-no-response convention above.
+      // An opaque Response's headers are empty (not absent, not
+      // throwing) per the Fetch spec, so this naturally produces null
+      // for opaque responses too, with no special-casing needed here.
+      contentType: info.state === "fulfilled" ? info.response.headers.get("content-type") : null,
+      contentLength:
+        info.state === "fulfilled"
+          ? parseContentLength(info.response.headers.get("content-length"))
+          : null,
     };
 
     bus.report(normalizeNetworkEvent(capturedRequest));
@@ -79,6 +94,13 @@ export function createNetworkPlugin(bus: EventBus): Plugin {
       duration: info.duration,
       outcome,
       severity,
+      // Issue #18 / ADR-0010 amendment: same "only load means a real
+      // response" gate as `status` above. Parsing happens here, not
+      // in xhr-interceptor.ts, so parseContentLength() is called from
+      // exactly one place regardless of which capture mechanism
+      // produced the raw string.
+      contentType: info.event === "load" ? info.contentType : null,
+      contentLength: info.event === "load" ? parseContentLength(info.contentLengthHeader) : null,
     };
 
     bus.report(normalizeNetworkEvent(capturedRequest));

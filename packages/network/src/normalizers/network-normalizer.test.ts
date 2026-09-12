@@ -12,6 +12,8 @@ function makeCapturedRequest(overrides: Partial<CapturedRequest> = {}): Captured
     duration: 142,
     outcome: "success",
     severity: "info",
+    contentType: "application/json",
+    contentLength: 42,
     ...overrides,
   };
 }
@@ -87,6 +89,8 @@ describe("normalizeNetworkEvent", () => {
       status: 500,
       duration: 900,
       outcome: "http-error",
+      contentType: "application/json",
+      contentLength: 42,
     });
   });
 
@@ -94,6 +98,21 @@ describe("normalizeNetworkEvent", () => {
     const request = makeCapturedRequest({ status: null, outcome: "timeout" });
     const result = normalizeNetworkEvent(request);
     expect(result.metadata?.status).toBeNull();
+  });
+
+  it("passes contentType and contentLength through unchanged, including null and 0", () => {
+    const withValues = normalizeNetworkEvent(
+      makeCapturedRequest({ contentType: "text/plain; charset=utf-8", contentLength: 0 })
+    );
+    expect(withValues.metadata).toMatchObject({
+      contentType: "text/plain; charset=utf-8",
+      contentLength: 0,
+    });
+
+    const withNulls = normalizeNetworkEvent(
+      makeCapturedRequest({ contentType: null, contentLength: null })
+    );
+    expect(withNulls.metadata).toMatchObject({ contentType: null, contentLength: null });
   });
 
   it("is deterministic — the same input produces structurally identical output", () => {

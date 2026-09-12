@@ -387,3 +387,133 @@ already-stated architecture true, not a change to it. Outcome
 classification, severity mapping, redirect-hop handling, and Content-
 Type/size capture — every other Open question above — are unaffected
 and remain exactly as open as before this amendment.
+
+## Amendment (Issue #18): response metadata contract — `contentType` and `contentLength`
+
+This amendment resolves the "Content-Type/size capture" question the
+Issue #17 amendment above explicitly left open. It adds two fields to
+`CapturedRequest` and the reported event's `metadata`.
+
+### `contentType: string | null`
+
+The raw, unmodified `Content-Type` response header value, including
+any parameters (e.g. `charset=utf-8`). Not parsed into a separate
+MIME-type/charset structure, not case-normalized. This matches how
+every other captured value in this package is treated (`method`,
+`outcome`) — raw, minimally processed — and preserves real diagnostic
+value a parsed representation would discard (an unexpected charset is
+sometimes the actual thing someone is debugging).
+
+### `contentLength: number | null`
+
+The non-negative decimal integer represented by the `Content-Length`
+response header, exposed as a number only when it can be represented
+exactly as a JavaScript safe integer. Otherwise `null`.
+
+**This is not a measurement of decoded response-body size or
+browser-observed network transfer size.** It is metadata the response
+supplied, nothing more. Two independent reasons it can diverge from
+"how many bytes the body actually was" once decoded by the browser:
+Content-Encoding (e.g. `gzip`) means the header describes the
+_encoded_ representation's size, not the decoded size the browser
+transparently hands back to application code — RFC 9110 §8.6 confirms
+this directly, and it is not a hypothetical: a real, documented case
+showed a server correctly declaring `Content-Length: 5084527` for a
+response that decoded to `42846965` bytes, roughly 8.4× larger,
+correct behavior per spec, not a lying server. Separately,
+`Transfer-Encoding: chunked` responses frequently omit `Content-Length`
+entirely, since chunked framing has no pre-known length by design.
+
+Naming this field `contentLength`, not `responseSize`, is a deliberate
+part of the decision, not a naming preference. DevLens cannot honestly
+provide "response size" as a general concept across both capture
+mechanisms without reading the response body (explicitly out of scope
+— see Scope restrictions), so no field claiming to represent that
+concept is added. A future version could add explicitly-named,
+narrowly-scoped fields (`encodedBodySize`, `decodedBodySize`,
+`transferSize`) if a browser API ever makes them reliably available
+without reading the body — they should never collapse into one vague
+"size" field, for the same reason `contentLength` isn't named that
+now.
+
+### `null` semantics
+
+**`null` means the metadata is unavailable to DevLens at the capture
+boundary — not that the header was necessarily absent from the
+server's response.** A cross-origin `no-cors` response may carry a
+perfectly valid header on the wire that DevLens, running with the same
+restrictions as any other page script, simply isn't permitted to see.
+Comparing DevLens's `null` against a value visible in a browser's own
+DevTools Network panel (which has privileged access page JS does not)
+is comparing two different access contexts, not evidence of a DevLens
+bug.
+
+Both fields collapse every unavailable case to the same `null` — no
+header sent, an invalid/malformed value, a value too large to
+represent as a safe integer, or access denied by the browser's opaque-
+response model. This is a deliberate single representation, not four
+different ones consumers would need to distinguish.
+
+### Fetch/XHR availability matrix
+
+| Situation                                                                 | `contentType`                        | `contentLength`                                                                                                                     |
+| ------------------------------------------------------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Same-origin response                                                      | captured                             | captured (if header present and valid)                                                                                              |
+| Cross-origin, CORS-permitted (`cors` mode, the Fetch default)             | captured                             | captured (if present/valid) — both are CORS-safelisted response headers, exposed without any `Access-Control-Expose-Headers` opt-in |
+| Cross-origin, `no-cors` (Fetch only — `opaque`/`opaqueredirect` response) | `null`                               | `null` — headers are empty and immutable on an opaque `Response`, confirmed directly against MDN's `Response.type` documentation    |
+| No response at all (network-error, aborted, timeout — either mechanism)   | `null`                               | `null`                                                                                                                              |
+| HTTP error response (404/500)                                             | captured                             | captured — a failed _outcome_ does not mean metadata is unavailable; these are independent                                          |
+| Followed redirect                                                         | reflects the **final** response only | reflects the **final** response only — no redirect-hop reporting is introduced by this amendment                                    |
+
+**A structural Fetch/XHR asymmetry, not a DevLens gap:** XHR has no
+equivalent of Fetch's `no-cors` mode — that is a Fetch-only
+(`RequestMode`) concept. An unauthorized cross-origin XHR request does
+not succeed-with-withheld-headers the way an opaque `fetch()` can; it
+fails outright as a network error, already covered by the existing
+outcome classification. XHR therefore cannot produce a state
+equivalent to Fetch's opaque-success case — there is nothing to report
+metadata for in that situation, not a missing capability.
+
+`getResponseHeader()` (XHR) and `Response.headers` (Fetch) are two
+different API-level exposure mechanisms, both constrained by the same
+underlying CORS-safelisted-response-header set. The mechanisms differ;
+the contractual result for DevLens (`accessible → capture, not
+accessible → null`) is identical either way.
+
+### Parsing contract for `contentLength`
+
+The header must match `Content-Length`'s own grammar exactly
+(`1*DIGIT` per RFC 9110) before being treated as a number at all — not
+a bare `Number()` coercion, which would wrongly accept strings that
+are not valid `Content-Length` syntax (scientific notation, hex
+prefixes, leading `+`, whitespace-only strings coercing to `0`). A
+value that parses but cannot be represented as a JavaScript safe
+integer is also `null`. `Content-Length: 0` is a valid, meaningful
+result and must be distinguished from `null` — an empty response body
+is a real, common case (a 204, or any endpoint with nothing to return),
+not an absent value.
+
+This strict grammar check is defensive robustness, not a claim that
+browsers routinely hand JavaScript malformed headers — a browser's own
+HTTP parser is expected to enforce valid framing before a header value
+would ever reach `Headers.get()`/`getResponseHeader()` looking
+malformed. The check exists so DevLens never reports a wrong number
+with false confidence, not because malformed values are expected to be
+common in practice.
+
+A duplicate/comma-joined `Content-Length` (multiple same-name headers,
+surfaced by both APIs as one comma-joined string) is not
+special-cased — it simply fails the single-integer grammar check above
+and becomes `null`, the same as any other value that doesn't conform.
+DevLens does not attempt to disambiguate, average, or pick the first
+of multiple values; it uses the browser-exposed string as-is and
+parses only what unambiguously conforms.
+
+### What this amendment does not touch
+
+No request or response body capture, no arbitrary response-header
+capture beyond these two, no redirect-hop-level reporting, no
+WebSocket/SSE support, no in-flight request events, no endpoint
+grouping or route-template inference — every other Open question above
+remains exactly as open as before this amendment. No changes to Core,
+`@devlens/panel`, Export, or Import.

@@ -353,3 +353,52 @@ there — it would require Panel API additions (a UI-state subscription
 mechanism) that don't exist today and aren't justified by any current
 consumer. If that need is ever demonstrated, it is a separate decision
 from the one ADR-0013 made.
+
+## Amendment (Issue #16): the floating trigger is resolved, not deferred
+
+The "Non-goal, still deferred" sentence above, and the matching entry
+in `inspection.md`'s Future extensions, are superseded by this
+amendment — left in place as the historical record of what was true
+before Issue #16, not retroactively rewritten.
+
+A floating trigger now exists: `createTrigger()`
+(`packages/panel/src/components/trigger.ts`), a narrow component
+following the same shape as the toolbar/search-box/session-controls
+components this ADR already describes — a real `<button>`, one
+outward callback, one imperative `setExpanded()` update method, no
+knowledge of the Store, filtering, search, or the EventBus.
+
+**Visibility, not a sixth ShadowRoot region.** Unlike every other
+amendment in this document (Session 4 through 7, each adding a named
+region other content lives inside), the trigger does not introduce a
+region — it's the one piece of Panel UI that must stay visible when
+every region _is_ hidden, since it's the only way to reopen them. The
+mechanism: `overlay.hide()`/`show()` toggle a `data-hidden` attribute
+on the host element itself (never exposed on the `Overlay` interface —
+reached by closure, the same way `mount()`/`unmount()` already touch
+`host`), paired with a `:host([data-hidden]) [data-devlens-panel-region]`
+stylesheet rule. Every existing region (toolbar, search box, session
+controls, the renderer's event-list and inspector) carries that shared
+marker; the trigger deliberately does not.
+
+**A wrapper-`<div>` approach was tried first and reverted** — wrapping
+all Panel content in a single container so hide()/show() could toggle
+one element broke roughly 59 existing tests that assumed a flat
+ShadowRoot structure (DOM-order checks reading `shadowRoot.children`
+directly). The host-attribute-plus-marker approach above requires zero
+DOM restructuring: every existing element stays exactly where it
+already was, and hiding is a matter of which elements carry the shared
+marker, not where they live in the tree.
+
+`hide()`/`show()`/`isHidden()` were added to `PanelController`,
+matching the existing `pause()`/`resume()`/`isPaused()` shape exactly
+— a single-funnel public method pair the trigger's own click handler
+reuses rather than duplicating, plus a synchronous read-only query,
+both idempotent. Hiding never touches Store contents, selection,
+filters, search, or subscriptions — it is strictly a DOM-visibility
+toggle, matching this ADR's original framing of hide/show as a
+lighter-weight sibling of mount()/unmount(), not a new lifecycle
+concept.
+
+No other Non-goal or Future-extension entry in this document or
+`inspection.md` is affected by this amendment.

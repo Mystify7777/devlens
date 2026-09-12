@@ -51,6 +51,22 @@ export interface XhrSettleInfo {
   status: number;
   /** Which of the four terminal events actually fired — loadend itself carries no information about which one caused it (MDN, confirmed in research); this file resolves that before reporting so the classifier never has to guess. */
   event: XhrTerminalEvent;
+  /**
+   * Issue #18 / ADR-0010 amendment. Raw `getResponseHeader("Content-Type")`
+   * value, read here because the XHR instance (`this`) is only ever in
+   * scope inside this file's own loadend handler — network.ts never
+   * sees it. Only meaningful when `event === "load"`, matching
+   * `status`'s existing convention above; network.ts is responsible
+   * for treating it as unavailable otherwise, not this file.
+   */
+  contentType: string | null;
+  /**
+   * Issue #18 / ADR-0010 amendment. Raw `getResponseHeader("Content-Length")`
+   * string — parsed by network.ts via the shared parseContentLength(),
+   * not here, keeping this file's job "extract what's in scope,"
+   * not "decide what a valid Content-Length looks like."
+   */
+  contentLengthHeader: string | null;
 }
 
 // Bridges open() -> send() only, per the file-level doc comment above.
@@ -178,6 +194,16 @@ export function installXhrInterceptor(onSettle?: (info: XhrSettleInfo) => void):
             duration: performance.now() - start,
             status: this.status,
             event: firedEvent ?? "error",
+            // Issue #18 / ADR-0010 amendment: extracted unconditionally
+            // here, same as `status` above — getResponseHeader()
+            // returns null on its own for a request that never reached
+            // a response (abort/error/timeout), so there's nothing to
+            // special-case. network.ts decides whether `event ===
+            // "load"` before treating either as meaningful, the exact
+            // same division of labor `status` already has: this file
+            // extracts raw facts, network.ts interprets them.
+            contentType: this.getResponseHeader("Content-Type"),
+            contentLengthHeader: this.getResponseHeader("Content-Length"),
           });
         } catch {
           // onSettle threw — deliberately swallowed, see comment above.

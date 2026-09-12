@@ -39,4 +39,23 @@ export interface CapturedRequest {
    * different axes"). Normalization does not decide this.
    */
   severity: EventSeverity;
+  /**
+   * Issue #18 / ADR-0010 amendment. Raw, unmodified Content-Type
+   * header value (parameters like charset preserved, nothing parsed
+   * or normalized). `null` means unavailable to DevLens at the
+   * capture boundary — absent header, opaque response, or no response
+   * at all — not necessarily "the server didn't send one." See the
+   * amendment for the full availability matrix.
+   */
+  contentType: string | null;
+  /**
+   * Issue #18 / ADR-0010 amendment. The Content-Length header's value,
+   * parsed only when it matches Content-Length's own grammar
+   * (1*DIGIT) and is representable as a JavaScript safe integer —
+   * see parseContentLength(). This is header metadata the response
+   * supplied, not a measurement of decoded body size or actual
+   * network transfer size; see the amendment for why those can
+   * diverge. `0` is a valid, meaningful result, distinct from `null`.
+   */
+  contentLength: number | null;
 }

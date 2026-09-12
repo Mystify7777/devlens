@@ -36,7 +36,7 @@ config and no framework dependency required for the core engine.
 - Normalized, versioned event model shared across every capture source
 - Shadow-DOM-isolated overlay — no CSS collisions with the host app
 - Zero runtime dependencies in `@devlens/core`
-- 627 test cases across the suite (`pnpm test` to run them)
+- 677 test cases across the suite (`pnpm test` to run them)
 - Every architectural decision recorded as an ADR before implementation
 
 ---
@@ -246,8 +246,10 @@ this project's earlier, contradictory documentation on React's role.
 Not yet committed to — this is a proposed direction, open for
 discussion rather than a locked sequence:
 
-- Further Network capture metadata (URL normalization, Content-Type,
-  response size — see `docs/research/network-capture.md`, Open Issues)
+- Network response metadata (Content-Type, response size — see
+  Issue #18 and `docs/research/network-capture.md`'s Open Issues; URL
+  normalization and query redaction, previously listed here, shipped
+  via Issue #17 and `docs/adr/0010-network-plugin.md`'s amendment)
 - A reactive Panel-state adapter for React (distinct from the
   error-boundary capture above) — deferred pending evidence of real
   demand; see `docs/adr/0013-react-integration-role.md`'s Scope

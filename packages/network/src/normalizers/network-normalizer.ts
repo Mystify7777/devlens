@@ -41,6 +41,8 @@ export function normalizeNetworkEvent(request: CapturedRequest): DevLensEventInp
       status: request.status,
       duration: request.duration,
       outcome: request.outcome,
+      contentType: request.contentType,
+      contentLength: request.contentLength,
     },
   };
 }
