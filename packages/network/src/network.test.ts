@@ -411,12 +411,20 @@ describe("createNetworkPlugin end-to-end URL redaction and normalization (Issue 
 // same reasoning the Issue #17 block above already established.
 describe("createNetworkPlugin end-to-end response metadata (Issue #18)", () => {
   describe("Fetch path", () => {
-    it("captures Content-Type and Content-Length when both are present", async () => {
+    it("captures Content-Type and Content-Length when both are present, preserving Content-Type parameters raw", async () => {
+      // Uses a charset parameter deliberately (not a bare
+      // "application/json") to verify the raw-value contract at the
+      // integration level, not just assert it in the ADR: the full
+      // header value survives unparsed, unnormalized, exactly as the
+      // response supplied it.
       window.fetch = vi.fn(
         async () =>
           new Response(null, {
             status: 200,
-            headers: { "Content-Type": "application/json", "Content-Length": "42" },
+            headers: {
+              "Content-Type": "application/json; charset=utf-8",
+              "Content-Length": "42",
+            },
           })
       ) as unknown as typeof fetch;
 
@@ -427,7 +435,7 @@ describe("createNetworkPlugin end-to-end response metadata (Issue #18)", () => {
       await window.fetch("https://api.example.com/users");
 
       expect(bus.getEvents()[0].metadata).toMatchObject({
-        contentType: "application/json",
+        contentType: "application/json; charset=utf-8",
         contentLength: 42,
       });
 
@@ -438,8 +446,11 @@ describe("createNetworkPlugin end-to-end response metadata (Issue #18)", () => {
       // The explicit regression guard every reviewer asked for by
       // name — not folded into the "both present" test above, so a
       // truthy-check regression can't hide inside a generic assertion.
+      // Deliberately an ordinary 200, not 204 — this is about "0" being
+      // a valid Content-Length value on any response with an empty
+      // body, not about any particular status code's own semantics.
       window.fetch = vi.fn(
-        async () => new Response(null, { status: 204, headers: { "Content-Length": "0" } })
+        async () => new Response(null, { status: 200, headers: { "Content-Length": "0" } })
       ) as unknown as typeof fetch;
 
       const bus = createEventBus();
@@ -449,6 +460,30 @@ describe("createNetworkPlugin end-to-end response metadata (Issue #18)", () => {
       await window.fetch("https://api.example.com/users");
 
       expect(bus.getEvents()[0].metadata?.contentLength).toBe(0);
+
+      network.uninstall();
+    });
+
+    it("reports null for contentLength when the header is present but malformed, confirming the parser is actually wired in here", async () => {
+      // parse-content-length.test.ts already exhaustively covers the
+      // parser's own rejection rules in isolation. This exists to
+      // confirm parseContentLength() is actually invoked at this real
+      // extraction site, not just correct in isolation — a
+      // comma-joined value is used here specifically since it's one
+      // of the more realistic ways a malformed value could appear
+      // (multiple same-name headers collapsed by the browser into one
+      // string), not an arbitrary/unrealistic garbage string.
+      window.fetch = vi.fn(
+        async () => new Response(null, { status: 200, headers: { "Content-Length": "123, 456" } })
+      ) as unknown as typeof fetch;
+
+      const bus = createEventBus();
+      const network = createNetworkPlugin(bus);
+      network.install();
+
+      await window.fetch("https://api.example.com/users");
+
+      expect(bus.getEvents()[0].metadata?.contentLength).toBeNull();
 
       network.uninstall();
     });
@@ -472,15 +507,22 @@ describe("createNetworkPlugin end-to-end response metadata (Issue #18)", () => {
       network.uninstall();
     });
 
-    it("reports null for both fields on an opaque response", async () => {
+    it("reports null for both fields on a simulated opaque-response shape (this environment cannot construct a genuine opaque Response)", async () => {
       window.fetch = vi.fn(async () => {
-        // Same simulation approach fetch-outcome.test.ts already
-        // uses — jsdom/Node's Response can't construct a genuinely
-        // opaque response directly (that's a fetch-internal filtering
-        // step), so this constructs the observable shape: status 0,
-        // matching type, and — critically for this test — no headers
-        // were ever added to this Response literal, matching a real
-        // opaque response's empty, immutable headers.
+        // This does NOT validate the browser's own opaque-response
+        // filtering mechanism — that filtering happens inside the
+        // real fetch algorithm when handling a no-cors cross-origin
+        // request, which cannot be triggered or reproduced in this
+        // test environment. Same simulation approach
+        // fetch-outcome.test.ts already uses: this constructs only
+        // the *observable shape* a genuine opaque Response has
+        // (status 0, type "opaque", and — critically for this test —
+        // no headers were ever added to this Response literal,
+        // matching a real opaque response's empty, immutable headers)
+        // and confirms DevLens's own extraction code handles that
+        // shape correctly. It does not and cannot confirm the browser
+        // actually produces that shape correctly — that's the
+        // platform's contract, not this package's.
         const response = new Response(null, { status: 200 });
         Object.defineProperty(response, "status", { value: 0 });
         Object.defineProperty(response, "type", { value: "opaque" });
@@ -546,12 +588,20 @@ describe("createNetworkPlugin end-to-end response metadata (Issue #18)", () => {
       network.uninstall();
     });
 
-    it("reflects only the final response's metadata after a followed redirect", async () => {
-      // fetch()'s resolved Response, with the default redirect:
-      // "follow", already represents the final response after all
-      // hops — no redirect-specific handling exists or is needed here,
-      // this test just confirms that remains true for these two
-      // fields specifically.
+    it("reads metadata from whatever Response fetch() resolves with, with no separate redirect-hop handling", async () => {
+      // This does NOT exercise a real redirect chain — window.fetch is
+      // fully mocked here (as in every test in this file), so no
+      // actual browser redirect-following algorithm ever runs. What
+      // this confirms is narrower and accurate to what's actually
+      // testable in this environment: extraction reads whatever
+      // Response object it's given — the `redirected`/`url`
+      // properties below are set only to make the shape resemble what
+      // a real post-redirect Response looks like, they are not
+      // exercised by anything under test. The production contract
+      // this documents is that fetch()'s own resolved Response
+      // (which, with the default redirect: "follow", already IS the
+      // final response after any real redirects) is read as-is — no
+      // redirect-hop reporting is introduced or attempted by DevLens.
       window.fetch = vi.fn(async () => {
         const response = new Response(null, {
           status: 200,
@@ -617,6 +667,8 @@ describe("createNetworkPlugin end-to-end response metadata (Issue #18)", () => {
     });
 
     it("captures Content-Length: 0 as the number 0, not null", () => {
+      // Deliberately an ordinary 200 — see the matching Fetch test's
+      // comment above for why 204 specifically was avoided here.
       const bus = createEventBus();
       const network = createNetworkPlugin(bus);
       network.install();
@@ -624,12 +676,33 @@ describe("createNetworkPlugin end-to-end response metadata (Issue #18)", () => {
       const xhr = new XMLHttpRequest();
       xhr.open("GET", "https://api.example.com/users");
       xhr.send();
-      setStatus(xhr, 204);
+      setStatus(xhr, 200);
       stubResponseHeaders(xhr, { "Content-Length": "0" });
       xhr.dispatchEvent(new Event("load"));
       xhr.dispatchEvent(new Event("loadend"));
 
       expect(bus.getEvents()[0].metadata?.contentLength).toBe(0);
+
+      network.uninstall();
+    });
+
+    it("reports null for contentLength when the header is present but malformed, confirming the parser is actually wired in here", () => {
+      // Same purpose as the matching Fetch test above: confirm
+      // parseContentLength() is actually invoked at this extraction
+      // site, not just correct in isolation.
+      const bus = createEventBus();
+      const network = createNetworkPlugin(bus);
+      network.install();
+
+      const xhr = new XMLHttpRequest();
+      xhr.open("GET", "https://api.example.com/users");
+      xhr.send();
+      setStatus(xhr, 200);
+      stubResponseHeaders(xhr, { "Content-Length": "123, 456" });
+      xhr.dispatchEvent(new Event("load"));
+      xhr.dispatchEvent(new Event("loadend"));
+
+      expect(bus.getEvents()[0].metadata?.contentLength).toBeNull();
 
       network.uninstall();
     });
@@ -655,7 +728,15 @@ describe("createNetworkPlugin end-to-end response metadata (Issue #18)", () => {
       network.uninstall();
     });
 
-    it("reports null for both fields on a network error (no opaque-equivalent case exists for XHR)", () => {
+    it("reports null for both fields on a synthetic error event (no opaque-equivalent case exists for XHR)", () => {
+      // Same caveat as the opaque-response test above: open()/send()
+      // are stubbed no-ops (see this describe block's beforeEach), so
+      // no real network attempt ever happens here. This dispatches a
+      // synthetic "error" Event directly, simulating only the
+      // observable shape a genuine network failure produces at the
+      // loadend handler — it does not and cannot exercise an actual
+      // DNS failure, connection refusal, or any other real-world cause
+      // of an XHR error event.
       const bus = createEventBus();
       const network = createNetworkPlugin(bus);
       network.install();

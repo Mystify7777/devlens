@@ -488,10 +488,11 @@ a bare `Number()` coercion, which would wrongly accept strings that
 are not valid `Content-Length` syntax (scientific notation, hex
 prefixes, leading `+`, whitespace-only strings coercing to `0`). A
 value that parses but cannot be represented as a JavaScript safe
-integer is also `null`. `Content-Length: 0` is a valid, meaningful
-result and must be distinguished from `null` — an empty response body
-is a real, common case (a 204, or any endpoint with nothing to return),
-not an absent value.
+integer is also `null`. `"0"` is a syntactically valid Content-Length
+value — an ordinary response can legitimately have an empty body and
+still declare its length as zero — and the parsed result `0` must be
+distinguished from `null` throughout: a truthy check on the parsed
+value would wrongly treat this valid, meaningful result as failure.
 
 This strict grammar check is defensive robustness, not a claim that
 browsers routinely hand JavaScript malformed headers — a browser's own
