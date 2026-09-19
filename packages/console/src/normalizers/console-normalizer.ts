@@ -60,8 +60,18 @@ export function normalizeConsoleCall(method: ConsoleMethod, args: unknown[]): De
     message,
     stack,
     // Full, untouched argument list preserved as structured data — not
-    // stringified. Per ADR-0007, object snapshotting vs. live references
-    // is intentionally deferred until the Panel consumes this.
+    // stringified, not snapshotted. metadata.args is the exact array
+    // the caller passed, same references throughout (Issue #19 /
+    // ADR-0007's amendment) — matching the same live-reference
+    // behavior Chrome/Firefox's own consoles use for logged objects.
     metadata: { args },
+    // Reporting this event must not freeze or traverse `args` — it's
+    // the caller's own live data, not DevLens's to mutate. `args`
+    // itself (not its individual elements) is enough: EventBus.report()
+    // seeds deepFreeze's cycle-guard with this exact reference, so
+    // recursion into it — and everything reachable from it — never
+    // happens at all. See DevLensEventInput.externallyOwned's own doc
+    // comment for the full mechanism.
+    externallyOwned: [args],
   };
 }

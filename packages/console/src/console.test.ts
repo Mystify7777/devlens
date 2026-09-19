@@ -69,6 +69,127 @@ describe("ConsolePlugin preservation", () => {
   });
 });
 
+// Issue #19 / ADR-0007's amendment: reporting a Console event must not
+// freeze, or otherwise interfere with, objects the caller still holds
+// live references to. This can only be observed through the real
+// EventBus.report() pipeline (freezing happens there, not in the
+// normalizer), which is why these live at this integration level
+// rather than in console-normalizer.test.ts's pure-function tests.
+describe("ConsolePlugin non-interference with caller-owned arguments", () => {
+  it("does not freeze a plain object argument", () => {
+    const bus = createEventBus();
+    const plugin = createConsolePlugin(bus);
+    plugin.install();
+
+    const userObject = { name: "Ann" };
+    console.log("logging in", userObject);
+    plugin.uninstall();
+
+    expect(Object.isFrozen(userObject)).toBe(false);
+  });
+
+  it("does not freeze an object nested inside a logged argument", () => {
+    const bus = createEventBus();
+    const plugin = createConsolePlugin(bus);
+    plugin.install();
+
+    const userObject = { name: "Ann", address: { city: "Springfield" } };
+    console.log(userObject);
+    plugin.uninstall();
+
+    expect(Object.isFrozen(userObject.address)).toBe(false);
+  });
+
+  it("the caller can still mutate a logged object afterward — proves the actual bug is fixed, not just its symptom", () => {
+    const bus = createEventBus();
+    const plugin = createConsolePlugin(bus);
+    plugin.install();
+
+    const userObject = { name: "Ann" };
+    console.log("logging in", userObject);
+    plugin.uninstall();
+
+    expect(() => {
+      userObject.name = "Bob";
+    }).not.toThrow();
+    expect(userObject.name).toBe("Bob");
+  });
+
+  it("Map, Set, and Date arguments all remain fully unaffected (regression — already true before this issue, worth pinning down explicitly for all three, not just one)", () => {
+    const bus = createEventBus();
+    const plugin = createConsolePlugin(bus);
+    plugin.install();
+
+    const map = new Map([["retries", 3]]);
+    const set = new Set([1, 2, 3]);
+    const date = new Date(2024, 0, 1);
+    const originalTime = date.getTime();
+
+    console.log("config", map, set, date);
+    plugin.uninstall();
+
+    expect(Object.isFrozen(map)).toBe(false);
+    expect(() => map.set("retries", 5)).not.toThrow();
+    expect(map.get("retries")).toBe(5);
+
+    expect(Object.isFrozen(set)).toBe(false);
+    expect(() => set.add(4)).not.toThrow();
+    expect(set.has(4)).toBe(true);
+
+    expect(Object.isFrozen(date)).toBe(false);
+    expect(() => date.setFullYear(2025)).not.toThrow();
+    expect(date.getTime()).not.toBe(originalTime);
+  });
+
+  it("metadata.args remains a genuine array with the original element identities", () => {
+    const bus = createEventBus();
+    const handler = vi.fn();
+    bus.subscribe("console", handler);
+    const plugin = createConsolePlugin(bus);
+    plugin.install();
+
+    const userObject = { name: "Ann" };
+    console.log("hello", userObject, 42);
+    plugin.uninstall();
+
+    const event = handler.mock.calls[0][0];
+    const args = event.metadata.args;
+
+    expect(Array.isArray(args)).toBe(true);
+    expect(args).toHaveLength(3);
+    expect(args[0]).toBe("hello");
+    expect(args[1]).toBe(userObject); // same reference, not a copy
+    expect(args[2]).toBe(42);
+  });
+
+  it("does not invoke a getter on a logged object — the production path for the same guarantee event-bus.test.ts pins down generically", () => {
+    const bus = createEventBus();
+    const plugin = createConsolePlugin(bus);
+    plugin.install();
+
+    let getterCalled = false;
+    const objectWithGetter = {
+      get dangerous() {
+        getterCalled = true;
+        return { value: 1 };
+      },
+    };
+
+    // Deliberately NOT the first argument. describeFirstArg() (used to
+    // build the event's `message` field) calls JSON.stringify() on
+    // args[0] only — a separate, pre-existing code path that would
+    // invoke a getter on its own, independent of deepFreeze, and has
+    // nothing to do with the externallyOwned mechanism this test
+    // exists to verify. Putting the getter-bearing object second
+    // isolates the one thing actually under test: that
+    // EventBus.report()'s freezing pass never touches it.
+    console.log("logging an object", objectWithGetter);
+    plugin.uninstall();
+
+    expect(getterCalled).toBe(false);
+  });
+});
+
 describe("ConsolePlugin event generation", () => {
   it("console.warn produces a matching DevLensEvent on the bus", () => {
     const bus = createEventBus();

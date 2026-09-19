@@ -64,4 +64,27 @@ export type DevLensEventInput = Omit<DevLensEvent, "id" | "timestamp" | "version
   id?: string;
   timestamp?: number;
   version?: 1;
+  /**
+   * Issue #19 / ADR-0007's amendment. Specific value references that
+   * must not be frozen or traversed while this event is being
+   * reported — e.g. a live object a plugin captured but does not own
+   * (Console's `metadata.args` is the motivating and, as of this
+   * writing, only case). Consumed entirely by EventBus.report() to
+   * seed deepFreeze()'s existing cycle-guard before middleware runs;
+   * never appears on the resulting DevLensEvent, and middleware never
+   * sees this list.
+   *
+   * The exemption is identity-based, not path-based: if the same
+   * object is reachable through more than one property in the final
+   * event (e.g. also copied into `context` by middleware), it remains
+   * unfrozen everywhere it's reachable, not just at the path it was
+   * declared through. This is a structural consequence of how
+   * `Object.freeze()` works — it freezes an object, not a path to
+   * one — not a limitation of this field.
+   *
+   * Only object and function references can meaningfully participate
+   * (a `WeakSet`'s own requirement); any other value included here is
+   * silently ignored rather than causing an error.
+   */
+  externallyOwned?: unknown[];
 };

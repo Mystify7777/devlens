@@ -171,3 +171,76 @@ called five times avoids five near-identical files drifting out of sync.
   since snapshotting strategy (deep clone? structuredClone? leave as
   live reference?) depends on how that consumer actually wants to use
   the data. Recorded here so this isn't mistaken for an oversight later.
+
+## Amendment (Issue #19): non-interference for `metadata.args`
+
+The "Object snapshotting vs. live references" entry above frames live
+references purely as a value-staleness question. That framing is
+correct as far as it goes — confirmed directly against Mozilla's own
+bug tracker (bugzilla #754861, #1033031): both Chrome and Firefox
+intentionally keep live references to logged objects, not snapshots,
+and a request to change this was filed and closed as a duplicate of
+the accepted behavior — but it is incomplete. It did not anticipate
+that Core's `deepFreeze()` (ADR-0002), applied uniformly to every
+reported event's metadata, would recursively freeze whatever object
+graph `args` points to, including objects the logging code still holds
+a live reference to and expects to keep mutating. Native browser
+consoles never do this — their live-reference behavior risks showing a
+stale value later, but never breaks the caller's own code. This
+package's prior behavior was strictly worse than the precedent it was
+already citing.
+
+**Panel is an existing consumer of event metadata; it is not evidence
+that snapshotting is required.** It renders whatever value is present,
+generically, via `JSON.stringify()` at render time (see
+`packages/panel/src/components/inspector.ts`) — it has no dependency
+on point-in-time capture either way. The actual trigger for this
+amendment was Core's own general freezing behavior conflicting with
+this package's live-reference contract, discovered by inspecting
+`deepFreeze()` and this package's normalizer together, not any request
+from Panel.
+
+A second, independent non-interference problem was found alongside
+the freezing one: `deepFreeze()` reads each property via direct value
+access (`value[key]`), which invokes getters rather than merely
+inspecting descriptors. An object with a `get` accessor passed to
+`console.log` previously had that accessor's code executed as a side
+effect of reporting — at a time and in a context the caller never
+chose. The fix below resolves both problems with the same mechanism,
+since both stem from the same recursive traversal.
+
+**Decision**: `metadata.args` remains exactly what it always was — the
+real, live, unmodified argument array, same identity, same elements.
+`EventBus.report()` accepts an optional, public, generic
+`externallyOwned?: unknown[]` field on `DevLensEventInput` (Core, not
+Console-specific): specific value references that must not be frozen
+or traversed during reporting. `deepFreeze()` itself is unchanged — the
+exemption reuses its existing cycle-guard `seen` parameter, seeded once
+before middleware runs and never exposed to middleware or present on
+the resulting event. This package sets `externallyOwned: [args]` in
+its normalizer — the array reference alone, not its individual
+elements — which is sufficient, since `deepFreeze` returns before
+recursing once it finds a `seen` match, protecting everything reachable
+beneath that one reference for free.
+
+The exemption is identity-based, not path-based: an exempted value
+remains unfrozen everywhere it's reachable in the final event,
+including through property paths other than where it was originally
+declared. This is not a limitation to work around — it is a structural
+consequence of how `Object.freeze()` works (it freezes an object, not
+a path to one), and any path-based alternative would have been
+fragile, since its correctness would depend on which path a shared
+reference happened to be visited through first.
+
+This package is the first, and as of this amendment the only,
+consumer of `externallyOwned`. The field's own specification makes no
+reference to Console and requires none to be understood or reused
+correctly by a future plugin with a genuinely equivalent need.
+
+**Remains explicitly deferred**: snapshotting/cloning semantics for
+`metadata.args` — this amendment makes the non-interference bug moot,
+it does not answer the staleness question the original entry above
+raised, and that question should stay open until a real, concrete
+consumer need for point-in-time values is demonstrated. Extending
+`externallyOwned` usage to any plugin other than Console remains
+undone — no second real consumer exists yet.

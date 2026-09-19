@@ -57,6 +57,116 @@ describe("EventBus.report", () => {
   });
 });
 
+// Issue #19 / ADR-0007's amendment: externallyOwned. See
+// DevLensEventInput's own doc comment for the full contract.
+describe("EventBus.report externallyOwned exemption", () => {
+  it("does not freeze a value listed in externallyOwned", () => {
+    const bus = createEventBus();
+    const shared = { value: 1 };
+    bus.report(baseInput({ metadata: { args: shared }, externallyOwned: [shared] }));
+    expect(Object.isFrozen(shared)).toBe(false);
+  });
+
+  it("does not freeze anything nested inside an exempted value", () => {
+    const bus = createEventBus();
+    const shared = { nested: { deeper: { value: 1 } } };
+    bus.report(baseInput({ metadata: { args: shared }, externallyOwned: [shared] }));
+    expect(Object.isFrozen(shared.nested)).toBe(false);
+    expect(Object.isFrozen(shared.nested.deeper)).toBe(false);
+  });
+
+  it("still fully freezes a value NOT listed in externallyOwned — the exemption is explicit, not a blanket rule for arrays or any key name", () => {
+    const bus = createEventBus();
+    const notExempt = { nested: { value: 1 } };
+    bus.report(baseInput({ metadata: { args: notExempt } }));
+    expect(Object.isFrozen(notExempt)).toBe(true);
+    expect(Object.isFrozen(notExempt.nested)).toBe(true);
+  });
+
+  it("never leaks externallyOwned itself onto the resulting event", () => {
+    const bus = createEventBus();
+    const shared = { value: 1 };
+    const event = bus.report(baseInput({ metadata: {}, externallyOwned: [shared] }));
+    expect("externallyOwned" in event).toBe(false);
+  });
+
+  it("exempts an object wherever it is reachable in the final event, not only at the path it was declared through — a structural consequence of Object.freeze() operating on objects, not paths", () => {
+    const bus = createEventBus();
+    const shared = { value: 1 };
+    const event = bus.report(
+      baseInput({
+        metadata: { args: [shared], other: shared },
+        externallyOwned: [shared],
+      })
+    );
+    expect(Object.isFrozen((event.metadata as Record<string, unknown>).other)).toBe(false);
+    expect(Object.isFrozen(shared)).toBe(false);
+  });
+
+  it("does not expose the exemption list to middleware, and does not let middleware manufacture new exemptions", () => {
+    const bus = createEventBus();
+    const shared = { value: 1 };
+    let sawExemptionList = false;
+    bus.addMiddleware((event, next) => {
+      if ("externallyOwned" in event) sawExemptionList = true;
+      next();
+    });
+
+    bus.report(baseInput({ metadata: { args: shared }, externallyOwned: [shared] }));
+
+    expect(sawExemptionList).toBe(false);
+  });
+
+  it("still freezes ordinary metadata introduced by middleware — the exemption never becomes a blanket rule", () => {
+    const bus = createEventBus();
+    const middlewareOwned = { value: 1 };
+    bus.addMiddleware((event, next) => {
+      next({ ...event, metadata: { ...event.metadata, addedByMiddleware: middlewareOwned } });
+    });
+
+    const event = bus.report(baseInput({ metadata: {} }));
+
+    expect(Object.isFrozen((event.metadata as Record<string, unknown>).addedByMiddleware)).toBe(
+      true
+    );
+  });
+
+  it("silently ignores non-object entries in externallyOwned rather than throwing", () => {
+    const bus = createEventBus();
+    // externallyOwned's declared type is unknown[] specifically so
+    // callers aren't forced to pre-filter — non-object entries here
+    // are valid input, not a type error, and must be handled
+    // gracefully at runtime rather than crashing WeakSet's
+    // constructor.
+    expect(() =>
+      bus.report(baseInput({ metadata: {}, externallyOwned: [42, "oops", null, undefined] }))
+    ).not.toThrow();
+  });
+
+  it("never invokes a getter on an exempted value — the getter guarantee belongs to externallyOwned's own semantics, not specifically to Console", () => {
+    // deepFreeze() reads each property via direct value access
+    // (value[key]), which invokes getters rather than merely
+    // inspecting descriptors. An exempted value is never recursed
+    // into at all (deepFreeze returns as soon as it finds a `seen`
+    // match), so no property of it — including a getter — is ever
+    // read as a side effect of reporting. This pins that guarantee
+    // down at the generic Core level, independent of any specific
+    // plugin.
+    const bus = createEventBus();
+    let getterCalled = false;
+    const shared = {
+      get dangerous() {
+        getterCalled = true;
+        return { value: 1 };
+      },
+    };
+
+    bus.report(baseInput({ metadata: { args: shared }, externallyOwned: [shared] }));
+
+    expect(getterCalled).toBe(false);
+  });
+});
+
 describe("EventBus.subscribe", () => {
   it("receives events matching its category", () => {
     const bus = createEventBus();

@@ -76,7 +76,12 @@ bus.destroy()
   built-in/host objects (Date, Map, Set, RegExp, Error, DOM nodes,
   functions) and guarding against cyclic references via a WeakSet. Prevents
   freezing arbitrary host objects a plugin might carelessly attach to
-  `metadata`/`context`.
+  `metadata`/`context`. This skip-by-type mechanism only covers built-in
+  object types, not a _plain_ object/array a plugin captures without
+  owning — see ADR-0007's Issue #19 amendment, which extends
+  non-interference to that case via a caller-declared exemption list
+  (`DevLensEventInput.externallyOwned`) that reuses this same `seen`
+  parameter rather than changing `deepFreeze` itself.
 - Removed `utils/assert.ts` and `utils/timestamp.ts` — both were
   single-use abstractions with no second consumer. Will reintroduce when
   the Event Store (or another package) has a concrete need.

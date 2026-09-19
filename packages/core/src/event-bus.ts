@@ -96,8 +96,20 @@ export function createEventBus(options: EventBusOptions = {}): EventBus {
     report(input) {
       assertNotDestroyed("report");
 
+      // Destructured out before draft is built — not a style choice.
+      // Spreading `input` into `draft` below does not itself strip
+      // extra properties (TypeScript's excess-property checking only
+      // applies to object literals, not spreads), so if this weren't
+      // removed first it would silently leak onto the runtime event
+      // despite MutableDevLensEvent's type claiming it isn't there.
+      // Destructuring it out here is what actually keeps it off
+      // `draft`, off whatever middleware sees, and off the final
+      // frozen event. See DevLensEventInput's own doc comment for the
+      // full contract (Issue #19 / ADR-0007's amendment).
+      const { externallyOwned, ...inputWithoutExemptions } = input;
+
       const draft: MutableDevLensEvent = {
-        ...input,
+        ...inputWithoutExemptions,
         id: input.id ?? generateEventId(),
         version: input.version ?? 1,
         timestamp: input.timestamp ?? Date.now(),
@@ -108,7 +120,22 @@ export function createEventBus(options: EventBusOptions = {}): EventBus {
         finalDraft = result;
       });
 
-      const finalEvent = deepFreeze(finalDraft) as DevLensEvent;
+      // Only object/function references can meaningfully participate
+      // in a WeakSet — WeakSet's own constructor type requires this
+      // (WeakKey = object in this project's TypeScript lib, confirmed
+      // directly against the installed lib.es2015.collection.d.ts /
+      // lib.es5.d.ts rather than assumed). A non-object entry in
+      // `externallyOwned` is silently ignored, not an error — matches
+      // this package's "never throw over malformed input it doesn't
+      // own" precedent elsewhere (normalizeCapturedUrl,
+      // parseContentLength).
+      const seen = new WeakSet(
+        (externallyOwned ?? []).filter(
+          (value): value is object =>
+            (typeof value === "object" && value !== null) || typeof value === "function"
+        )
+      );
+      const finalEvent = deepFreeze(finalDraft, seen) as DevLensEvent;
 
       replayBuffer.push(finalEvent);
       dispatchToSubscribers(finalEvent);
