@@ -244,3 +244,32 @@ raised, and that question should stay open until a real, concrete
 consumer need for point-in-time values is demonstrated. Extending
 `externallyOwned` usage to any plugin other than Console remains
 undone — no second real consumer exists yet.
+
+## Amendment (Issue #22): `stack` derivation from multi-argument calls
+
+The original "Message extraction" section did not specify `stack`.
+Before this amendment, `stack` was populated only when `args[0]` was an
+`Error`, so `console.error("failed", err)` lost `err.stack` from the
+primary field (it remained available via `metadata.args`).
+
+**Decision**: `message` and `title` are unchanged — `message` remains
+derived from the first argument only. `stack` is derived as follows:
+
+1. If `args[0] instanceof Error`: `stack = args[0].stack`. This is
+   authoritative, including when the value is `undefined` or empty;
+   later arguments are never consulted. Message and stack always refer
+   to the same Error.
+2. Otherwise: `stack` is the first `Error` in `args[1..]` (by position)
+   whose `stack` is a non-empty string. Later Errors without a usable
+   stack are skipped. If none qualify, `stack` is `undefined`.
+
+Detection is identity-based (`instanceof Error`), never duck-typed:
+`{ message, stack }` objects do not count, and no property of a
+non-Error argument is read (so arbitrary getters are never invoked).
+Consequently, Errors from another realm (which fail `instanceof`) are
+not recognized, in the first-argument case as before.
+
+`metadata.args` and `externallyOwned` behavior (Issue #19) is
+unchanged: the original array is preserved by reference; no argument is
+cloned, mutated, or frozen.
+

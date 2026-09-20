@@ -38,19 +38,34 @@ function describeFirstArg(arg: unknown): string {
 }
 
 /**
+ * Identity-based (instanceof Error) — never duck-types or reads properties
+ * of non-Error arguments, so hostile getters are never invoked.
+ */
+function findLaterErrorStack(args: unknown[]): string | undefined {
+  for (let i = 1; i < args.length; i++) {
+    const arg = args[i];
+    if (arg instanceof Error) {
+      const stack = arg.stack;
+      if (typeof stack === "string" && stack !== "") return stack;
+    }
+  }
+  return undefined;
+}
+
+/**
  * Pure function: console method + raw arguments -> DevLensEventInput.
  * No side effects, no bus access — testable entirely in isolation.
  *
- * TODO(v2): only the FIRST argument is inspected for message/stack
- * extraction. console.error("failed", err) currently loses err.stack,
- * since the Error is args[1], not args[0]. Worth scanning all args for
- * an Error instance in a future revision — deferred for v1 since the
- * common case (console.error(err) alone) already works correctly.
+ * Stack derivation (ADR-0007, Issue #22 amendment):
+ * - args[0] is an Error: its stack is authoritative (may be undefined);
+ *   later arguments are never consulted, keeping message and stack coherent.
+ * - otherwise: first Error in args[1..] with a non-empty string stack.
+ * `message` remains first-argument-only.
  */
 export function normalizeConsoleCall(method: ConsoleMethod, args: unknown[]): DevLensEventInput {
   const [first] = args;
   const message = args.length === 0 ? "" : describeFirstArg(first);
-  const stack = first instanceof Error ? first.stack : undefined;
+  const stack = first instanceof Error ? first.stack : findLaterErrorStack(args);
 
   return {
     origin: `console.${method}`,

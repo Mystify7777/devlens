@@ -229,6 +229,31 @@ describe("ConsolePlugin event generation", () => {
   });
 });
 
+describe("ConsolePlugin stack from later arguments (Issue #22)", () => {
+  it("console.error(\"failed\", err) reports err.stack and still runs the original", () => {
+    const original = console.error;
+    const spy = vi.fn();
+    console.error = spy;
+    const bus = createEventBus();
+    const plugin = createConsolePlugin(bus);
+    const events: { stack?: string; message: string }[] = [];
+    bus.subscribe("console", (e) => events.push(e));
+    try {
+      plugin.install();
+      const err = new Error("boom");
+      console.error("failed", err);
+      expect(spy).toHaveBeenCalledWith("failed", err);
+      expect(events).toHaveLength(1);
+      expect(events[0].message).toBe("failed");
+      expect(events[0].stack).toBe(err.stack);
+    } finally {
+      plugin.uninstall();
+      console.error = original;
+      bus.destroy();
+    }
+  });
+});
+
 describe("ConsolePlugin recursion guard", () => {
   it("a subscriber's console.log call prints normally but does not trigger a second report", () => {
     const bus = createEventBus();
