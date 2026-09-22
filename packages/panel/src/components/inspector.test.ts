@@ -270,3 +270,16 @@ describe("createInspector", () => {
     });
   });
 });
+
+describe("createInspector keyboard access (Issue #20)", () => {
+  it("is keyboard-focusable (scrollable region)", () => {
+    expect(createInspector().element.getAttribute("tabindex")).toBe("0");
+  });
+
+  it("stays focusable across empty and populated states", () => {
+    const inspector = createInspector();
+    inspector.render(null, "");
+    expect(inspector.element.getAttribute("tabindex")).toBe("0");
+  });
+});
+

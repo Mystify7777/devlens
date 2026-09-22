@@ -45,6 +45,8 @@ export interface Inspector {
 export function createInspector(): Inspector {
   const element = document.createElement("div");
   element.setAttribute("data-devlens-inspector", "");
+  // Scrollable region: must be keyboard-reachable (Issue #20).
+  element.setAttribute("tabindex", "0");
 
   function renderEmptyState() {
     element.replaceChildren();

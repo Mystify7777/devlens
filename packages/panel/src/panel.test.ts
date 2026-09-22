@@ -2139,3 +2139,85 @@ describe("createPanel floating trigger", () => {
     });
   });
 });
+
+describe("createPanel setTheme (Issue #20)", () => {
+  const host = () => document.querySelector("[data-devlens-panel-host]");
+
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("defaults to auto (no data-theme)", () => {
+    const panel = createPanel(createFakeStore());
+    panel.install();
+    expect(host()?.hasAttribute("data-theme")).toBe(false);
+    panel.uninstall();
+  });
+
+  it("applies light/dark and returns to auto", () => {
+    const panel = createPanel(createFakeStore());
+    panel.install();
+    panel.setTheme("light");
+    expect(host()?.getAttribute("data-theme")).toBe("light");
+    panel.setTheme("dark");
+    expect(host()?.getAttribute("data-theme")).toBe("dark");
+    panel.setTheme("auto");
+    expect(host()?.hasAttribute("data-theme")).toBe(false);
+    panel.uninstall();
+  });
+
+  it("setTheme() before the first install() is honored", () => {
+    const panel = createPanel(createFakeStore());
+    panel.setTheme("light");
+    panel.install();
+    expect(host()?.getAttribute("data-theme")).toBe("light");
+    panel.uninstall();
+  });
+
+  it("ignores invalid values", () => {
+    const panel = createPanel(createFakeStore());
+    panel.install();
+    panel.setTheme("dark");
+    panel.setTheme("sepia" as never);
+    expect(host()?.getAttribute("data-theme")).toBe("dark");
+    panel.uninstall();
+  });
+
+  it("invalid value before install() does not leak into the replayed theme", () => {
+    const panel = createPanel(createFakeStore());
+    panel.setTheme("light");
+    panel.setTheme("sepia" as never);
+    panel.install();
+    expect(host()?.getAttribute("data-theme")).toBe("light");
+    panel.uninstall();
+  });
+
+  it("invalid value with no prior selection stays auto", () => {
+    const panel = createPanel(createFakeStore());
+    panel.setTheme("sepia" as never);
+    panel.install();
+    expect(host()?.hasAttribute("data-theme")).toBe(false);
+    panel.uninstall();
+  });
+
+  it("uninstall resets to auto for the next install", () => {
+    const panel = createPanel(createFakeStore());
+    panel.install();
+    panel.setTheme("dark");
+    panel.uninstall();
+    panel.install();
+    expect(host()?.hasAttribute("data-theme")).toBe(false);
+    panel.uninstall();
+  });
+
+  it("does not change hidden state, selection-independent DOM, or the trigger", () => {
+    const panel = createPanel(createFakeStore());
+    panel.install();
+    panel.hide();
+    panel.setTheme("light");
+    expect(panel.isHidden()).toBe(true);
+    expect(host()?.shadowRoot?.querySelector("[data-devlens-trigger]")?.getAttribute("aria-expanded")).toBe("false");
+    panel.uninstall();
+  });
+});
+

@@ -1,6 +1,6 @@
 // packages/panel/src/panel.ts
 import type { DevLensEvent, EventStore, Plugin } from "@devlens/core";
-import { createOverlay } from "./overlay";
+import { createOverlay, type PanelTheme } from "./overlay";
 import { createRenderer } from "./renderer";
 import { createToolbar } from "./components/toolbar";
 import { createSearchBox } from "./components/search-box";
@@ -64,6 +64,8 @@ export interface PanelController extends Plugin {
   hide(): void;
   show(): void;
   isHidden(): boolean;
+  /** Runtime presentation setting (Issue #20). Invalid values are ignored. */
+  setTheme(theme: PanelTheme): void;
 }
 
 const NAVIGATION_KEYS: Record<string, NavigationDirection> = {
@@ -90,6 +92,7 @@ export function createPanel(store: EventStore): PanelController {
   // at that point, since a freshly created overlay is always visible
   // regardless.
   let isHidden = false;
+  let theme: PanelTheme = "auto";
   let selectedEvent: DevLensEvent | null = null;
   let filters: FilterState = createEmptyFilterState();
   let searchQuery = "";
@@ -305,6 +308,12 @@ export function createPanel(store: EventStore): PanelController {
     trigger?.setExpanded(true);
   }
 
+  function setTheme(next: PanelTheme) {
+    if (next !== "auto" && next !== "light" && next !== "dark") return;
+    theme = next;
+    overlay?.setTheme(theme);
+  }
+
   function getIsHidden() {
     return isHidden;
   }
@@ -381,6 +390,9 @@ export function createPanel(store: EventStore): PanelController {
       if (isHidden) {
         overlay.hide();
       }
+      // Same rationale as isHidden above: a setTheme() called before
+      // the first install() must reach the freshly created overlay.
+      overlay.setTheme(theme);
 
       updateEventList();
       selectEvent(null);
@@ -455,11 +467,13 @@ export function createPanel(store: EventStore): PanelController {
       currentVisibleEvents = [];
       isPaused = false;
       isHidden = false;
+      theme = "auto";
       installed = false;
     },
 
     setFilters: applyNewFilters,
     setSearchQuery: applyNewSearchQuery,
+    setTheme,
     pause,
     resume,
     clear,

@@ -1,5 +1,7 @@
 import { PANEL_STYLES } from "./styles";
 
+export type PanelTheme = "auto" | "light" | "dark";
+
 export interface Overlay {
   readonly shadowRoot: ShadowRoot;
   mount(): void;
@@ -29,6 +31,13 @@ export interface Overlay {
    * was last rendered is simply visible again.
    */
   show(): void;
+  /**
+   * Sets the theme (Issue #20). "auto" removes `data-theme` so the
+   * stylesheet follows `prefers-color-scheme`; "light"/"dark" set it
+   * explicitly, overriding the system preference. Host attribute only —
+   * like hide()/show(), the host element is never exposed.
+   */
+  setTheme(theme: PanelTheme): void;
 }
 /**
  * Creates the Panel's host element, attaches an open Shadow DOM to it
@@ -64,6 +73,10 @@ export function createOverlay(): Overlay {
     },
     show() {
       host.removeAttribute("data-hidden");
+    },
+    setTheme(theme) {
+      if (theme === "auto") host.removeAttribute("data-theme");
+      else if (theme === "light" || theme === "dark") host.setAttribute("data-theme", theme);
     },
   };
 }

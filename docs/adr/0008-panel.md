@@ -402,3 +402,61 @@ concept.
 
 No other Non-goal or Future-extension entry in this document or
 `inspection.md` is affected by this amendment.
+
+## Amendment (Issue #20): production visual styling and theme contract
+
+**Supersedes the "Theming" section's dark-only v1 decision.** That text
+is left in place as the historical record. The Panel now ships dark and
+light themes with an automatic default.
+
+**Theme.** Semantic CSS custom properties (`--devlens-*`) are defined
+on `:host`, sourced from data in `src/theme/tokens.ts` so the contrast
+test reads the shipped values. Cascade: dark tokens by default →
+`prefers-color-scheme: light` switches to light → `data-theme="light"`
+or `data-theme="dark"` on the host overrides the system preference.
+Default is `auto`. Runtime selection is `PanelController.setTheme("auto"
+| "light" | "dark")`, mirroring `pause()`/`hide()`: an unexposed host
+attribute (`data-theme`, removed for `auto`), honored when called
+before the first `install()`, reset to `auto` on `uninstall()`, invalid
+values ignored. No persistence, events, or system-preference observers.
+Embedders may override tokens with outer CSS on the host element; only
+the accent color and font stacks are considered supported overrides.
+
+**Layout is CSS-only.** The ShadowRoot stays flat (see the Issue #16
+amendment). `:host` is the grid container; regions are placed through
+their existing `data-devlens-*` markers. Floating window anchored
+bottom-right above the trigger; toolbar spans the top, search and
+session controls share row two, list and inspector split below.
+Below 600px the panes stack. Hidden state removes only the regions —
+the host keeps a zero-size box so the fixed trigger remains. The host
+must never carry `transform`/`filter`/`contain`.
+
+**Host isolation.** Open Shadow DOM is retained: it already provides
+selector isolation in both directions, fits the drop-in architecture,
+and adds no build or styling mechanism. Inherited properties still
+cross the boundary, so `:host` uses `all: initial` and sets font, color,
+line-height and direction explicitly; `display`, `position` and
+`z-index` on `:host` are `!important` so outer rules targeting the host
+element cannot displace them. Content is forced LTR.
+
+**Severity.** Existing six severities, no additions. The uppercase
+severity text remains the color-independent signal; color, a left
+accent bar, and a faint tint for warn/error/fatal are additive. `fatal`
+uses a filled label so it is distinct from `error` without relying on
+hue. Selected rows use a fill plus an inset accent outline (not a
+replacement of the severity bar).
+
+**Accessibility.** Contrast is enforced by a unit test over the token
+maps (4.5:1 text, 3:1 control outlines and focus ring, both themes).
+A separate `border-control` token exists because decorative borders do
+not meet 3:1. `:focus-visible` rings are always present. Touch targets
+are 24px, 44px under `pointer: coarse`. The inspector is scrollable and
+now has `tabindex="0"`. Full ARIA restructuring (roles, `aria-selected`,
+region names) is explicitly deferred.
+
+**Motion.** No open/close animation. Only 120ms background/border
+transitions, disabled under `prefers-reduced-motion`.
+
+**Deferred.** Rendering timestamp, category, or a stack-availability
+indicator in rows (a rendering change, tracked as follow-up), resizing,
+dragging, docking, JSON pretty-printing, ARIA restructuring.

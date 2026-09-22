@@ -6,6 +6,7 @@
  */
 export { createPanel } from "./panel";
 export type { PanelController } from "./panel";
+export type { PanelTheme } from "./overlay";
 export { MAX_RENDERED_EVENTS } from "./constants";
 export { applyFilters, createEmptyFilterState } from "./filters";
 export type { FilterState } from "./filters";

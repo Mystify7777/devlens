@@ -107,4 +107,41 @@ describe("createOverlay", () => {
 
     overlay.unmount();
   });
+
+  describe("setTheme (Issue #20)", () => {
+    it("has no data-theme by default (auto)", () => {
+      const overlay = createOverlay();
+      expect(overlay.shadowRoot.host.hasAttribute("data-theme")).toBe(false);
+    });
+
+    it("sets data-theme for explicit light/dark", () => {
+      const overlay = createOverlay();
+      overlay.setTheme("light");
+      expect(overlay.shadowRoot.host.getAttribute("data-theme")).toBe("light");
+      overlay.setTheme("dark");
+      expect(overlay.shadowRoot.host.getAttribute("data-theme")).toBe("dark");
+    });
+
+    it("auto removes data-theme", () => {
+      const overlay = createOverlay();
+      overlay.setTheme("dark");
+      overlay.setTheme("auto");
+      expect(overlay.shadowRoot.host.hasAttribute("data-theme")).toBe(false);
+    });
+
+    it("ignores invalid values, leaving the current theme unchanged", () => {
+      const overlay = createOverlay();
+      overlay.setTheme("light");
+      overlay.setTheme("sepia" as never);
+      expect(overlay.shadowRoot.host.getAttribute("data-theme")).toBe("light");
+    });
+
+    it("does not affect data-hidden", () => {
+      const overlay = createOverlay();
+      overlay.hide();
+      overlay.setTheme("light");
+      expect(overlay.shadowRoot.host.hasAttribute("data-hidden")).toBe(true);
+    });
+  });
 });
+
