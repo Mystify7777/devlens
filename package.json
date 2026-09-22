@@ -7,7 +7,8 @@
     "test": "pnpm -r test",
     "clean": "pnpm -r clean",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "typecheck": "pnpm -r exec tsc --noEmit"
   },
   "devDependencies": {
     "prettier": "3.9.6",
