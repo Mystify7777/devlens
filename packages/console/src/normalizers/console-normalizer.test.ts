@@ -112,7 +112,11 @@ describe("normalizeConsoleCall", () => {
     });
 
     it("skips later Errors with undefined stack", () => {
-      const r = normalizeConsoleCall("error", ["a", withStack("1", undefined), withStack("2", "S2")]);
+      const r = normalizeConsoleCall("error", [
+        "a",
+        withStack("1", undefined),
+        withStack("2", "S2"),
+      ]);
       expect(r.stack).toBe("S2");
     });
 

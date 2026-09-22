@@ -282,4 +282,3 @@ describe("createInspector keyboard access (Issue #20)", () => {
     expect(inspector.element.getAttribute("tabindex")).toBe("0");
   });
 });
-

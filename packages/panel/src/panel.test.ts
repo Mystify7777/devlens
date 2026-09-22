@@ -2216,8 +2216,9 @@ describe("createPanel setTheme (Issue #20)", () => {
     panel.hide();
     panel.setTheme("light");
     expect(panel.isHidden()).toBe(true);
-    expect(host()?.shadowRoot?.querySelector("[data-devlens-trigger]")?.getAttribute("aria-expanded")).toBe("false");
+    expect(
+      host()?.shadowRoot?.querySelector("[data-devlens-trigger]")?.getAttribute("aria-expanded")
+    ).toBe("false");
     panel.uninstall();
   });
 });
-

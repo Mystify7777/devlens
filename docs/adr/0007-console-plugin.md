@@ -272,4 +272,3 @@ not recognized, in the first-argument case as before.
 `metadata.args` and `externallyOwned` behavior (Issue #19) is
 unchanged: the original array is preserved by reference; no argument is
 cloned, mutated, or frozen.
-

@@ -230,7 +230,7 @@ describe("ConsolePlugin event generation", () => {
 });
 
 describe("ConsolePlugin stack from later arguments (Issue #22)", () => {
-  it("console.error(\"failed\", err) reports err.stack and still runs the original", () => {
+  it('console.error("failed", err) reports err.stack and still runs the original', () => {
     const original = console.error;
     const spy = vi.fn();
     console.error = spy;
