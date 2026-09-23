@@ -14,8 +14,7 @@ config and no framework dependency required for the core engine.
 > a VS Code extension could just as easily read from the same Store.
 
 <!--
-  TODO: replace with a real screenshot of apps/playground once the
-  Panel has real styling (styles.ts is still a placeholder). Rough
+  TODO: replace with a real screenshot of apps/playground. Rough
   target layout:
 
   +--------------------------------------------+
@@ -36,7 +35,7 @@ config and no framework dependency required for the core engine.
 - Normalized, versioned event model shared across every capture source
 - Shadow-DOM-isolated overlay — no CSS collisions with the host app
 - Zero runtime dependencies in `@devlens/core`
-- 677 test cases across the suite (`pnpm test` to run them)
+- 879 test cases across the suite (`pnpm test` to run them)
 - Every architectural decision recorded as an ADR before implementation
 
 ---
@@ -57,7 +56,11 @@ DevLens already provides a complete end-to-end event pipeline:
 
 - **Runtime** captures browser failures (`window.error`, unhandled rejections)
 - **Console** captures console activity, without ever suppressing native output
-- **Network** captures Fetch and asynchronous XHR requests, classified by outcome
+- **Network** captures Fetch and asynchronous XHR requests, classified by
+  outcome, with the captured URL canonicalized and query-parameter
+  values redacted by default (Issue #17), and response `contentType`/
+  `contentLength` metadata captured where the browser exposes it
+  (Issue #18)
 - **React** captures component errors via an error boundary, reporting
   React's `componentStack` alongside the caught error (client-only —
   see ADR-0013)
@@ -143,14 +146,14 @@ Components error capture are outside this package's scope.
 
 ## Packages
 
-| Package                                  | Description                                                        | Status |
-| ---------------------------------------- | ------------------------------------------------------------------ | ------ |
-| [`@devlens/core`](./packages/core)       | Event model, Event Bus, Event Store, Plugin contract               | ✅     |
-| [`@devlens/runtime`](./packages/runtime) | Captures `window.error` / `unhandledrejection`                     | ✅     |
-| [`@devlens/console`](./packages/console) | Intercepts `console.log/info/debug/warn/error`                     | ✅     |
-| [`@devlens/panel`](./packages/panel)     | Shadow-DOM overlay that renders events live                        | ✅     |
-| [`@devlens/network`](./packages/network) | Captures Fetch and async XHR requests, classified by outcome       | ✅     |
-| [`@devlens/react`](./packages/react)     | Client-only React error boundary reporting caught component errors | ✅     |
+| Package                                  | Description                                                                                            | Status |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------ |
+| [`@devlens/core`](./packages/core)       | Event model, Event Bus, Event Store, Plugin contract                                                   | ✅     |
+| [`@devlens/runtime`](./packages/runtime) | Captures `window.error` / `unhandledrejection`                                                         | ✅     |
+| [`@devlens/console`](./packages/console) | Intercepts `console.log/info/debug/warn/error`                                                         | ✅     |
+| [`@devlens/panel`](./packages/panel)     | Shadow-DOM overlay that renders events live                                                            | ✅     |
+| [`@devlens/network`](./packages/network) | Captures Fetch and async XHR requests, classified by outcome, with URL redaction and response metadata | ✅     |
+| [`@devlens/react`](./packages/react)     | Client-only React error boundary reporting caught component errors                                     | ✅     |
 
 ### `apps/playground`
 
@@ -243,13 +246,16 @@ to `docs/adr/0006-plugin-contract.md`, `docs/adr/0008-panel.md`, and
 `docs/adr/0009-v0.3.0-direction.md` for the historical correction to
 this project's earlier, contradictory documentation on React's role.
 
+Network URL canonicalization/query redaction (Issue #17) and response
+`contentType`/`contentLength` metadata (Issue #18) are both complete —
+see `docs/adr/0010-network-plugin.md`'s amendments. Response-body
+capture, arbitrary header capture, WebSockets, SSE, and endpoint
+grouping are not implemented and are not currently planned work, not
+merely omitted from this list.
+
 Not yet committed to — this is a proposed direction, open for
 discussion rather than a locked sequence:
 
-- Network response metadata (Content-Type, response size — see
-  Issue #18 and `docs/research/network-capture.md`'s Open Issues; URL
-  normalization and query redaction, previously listed here, shipped
-  via Issue #17 and `docs/adr/0010-network-plugin.md`'s amendment)
 - A reactive Panel-state adapter for React (distinct from the
   error-boundary capture above) — deferred pending evidence of real
   demand; see `docs/adr/0013-react-integration-role.md`'s Scope
