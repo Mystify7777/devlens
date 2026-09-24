@@ -246,6 +246,157 @@ reason this ADR was wrong to accept the trade today.
   deliberately departs from and explains why), ADR-0006 (Plugin
   contract).
 
+## Amendment (Issue #23): the `outcome`/`severity` contract — from draft to accepted
+
+The Decision section's "Outcome" subsection above, the Scope table's
+"(draft shape — see Open questions)" annotation, and two entries in the
+original Open questions list ("Exact `outcome` enum values" and
+"Severity mapping per outcome") all still describe this as unsettled.
+It is not — `packages/network/src/types.ts`,
+`classifiers/fetch-outcome.ts`, and `classifiers/xhr-outcome.ts` have
+implemented and tested a concrete contract since the Fetch+XHR
+milestone. That historical text is left as-is above (it accurately
+records what was undecided at the time this ADR was Accepted); this
+amendment is what supersedes it, the same way the Issue #17 amendment
+supersedes the "still open" URL text rather than editing it in place.
+This also supersedes the Issue #17 amendment's own closing line
+("severity mapping ... remain unaffected and remain exactly as open as
+before this amendment") for outcome/severity specifically — that line
+was true when written and is superseded here, not retracted there.
+
+### Accepted `NetworkOutcome`
+
+Six values, one place (`types.ts`), grew from the research sketch's
+draft five once the `status === 0` case was worked through honestly:
+
+```ts
+type NetworkOutcome = "success" | "http-error" | "network-error" | "aborted" | "timeout" | "opaque";
+```
+
+### Accepted classification, by capture mechanism
+
+Classification is duration-blind by construction — `FetchSettlement`
+and `XhrSettlement` (the classifiers' own input types) don't carry a
+`duration` field at all, so a classifier cannot lean on timing even by
+accident. Both classifiers report the **broader observable category**
+rather than guess whenever the browser doesn't distinguish two causes
+(fetch's ambiguous `AbortError`; a fulfilled response with a status
+neither classifier anticipated) — restated here because it's now the
+actual rule being followed, not just a research-stage instinct.
+
+**Fetch** (`classifyFetchOutcome`, from a settled `Promise`):
+
+| Settlement                                                                                       | Outcome         | Severity |
+| ------------------------------------------------------------------------------------------------ | --------------- | -------- |
+| rejected, `error.name === "AbortError"`                                                          | `aborted`       | `info`   |
+| rejected, `error.name === "TimeoutError"`                                                        | `timeout`       | `warn`   |
+| rejected, anything else                                                                          | `network-error` | `error`  |
+| fulfilled, `status === 0` and `type` is `opaque`/`opaqueredirect`                                | `opaque`        | `info`   |
+| fulfilled, `status` 200–299                                                                      | `success`       | `info`   |
+| fulfilled, `status` 400–499                                                                      | `http-error`    | `warn`   |
+| fulfilled, `status` 500–599                                                                      | `http-error`    | `error`  |
+| fulfilled, any other status (unreachable via `fetch()` today — see the classifier's own comment) | `success`       | `info`   |
+
+Rejection-name matching is duck-typed on `.name` (a string check), not
+`instanceof Error` — verified necessary, not merely cautious: jsdom's
+`DOMException` doesn't extend `Error`, so an `instanceof` check would
+silently misclassify a real `AbortError`/`TimeoutError` as
+`network-error` in that environment. A `Response` with
+`type === "error"` has no branch: per MDN, that's a Service-Worker
+construct that makes the _calling_ page's `fetch()` reject rather than
+resolve, and this plugin doesn't intercept Service Workers (see
+"Interception mechanism," above) — so a plain page `fetch()` cannot
+resolve into this function with that shape. Unreachable under this
+project's model, not merely unlikely; not special-cased.
+
+**XHR** (`classifyXhrOutcome`, from the terminal event a `loadend`
+handler observed):
+
+| Terminal event           | Outcome         | Severity |
+| ------------------------ | --------------- | -------- |
+| `abort`                  | `aborted`       | `info`   |
+| `timeout`                | `timeout`       | `warn`   |
+| `error`                  | `network-error` | `error`  |
+| `load`, `status` 200–299 | `success`       | `info`   |
+| `load`, `status` 400–499 | `http-error`    | `warn`   |
+| `load`, `status` 500–599 | `http-error`    | `error`  |
+| `load`, any other status | `success`       | `info`   |
+
+### Where Fetch and XHR genuinely diverge, and why
+
+- **XHR has no `opaque` outcome.** There is no `no-cors`-equivalent
+  mode for `XMLHttpRequest`; a cross-origin/CORS-blocked request
+  surfaces through XHR's native `error` event, landing in
+  `network-error` — not a gap, a real absence of the concept on that
+  API.
+- **Abort/timeout evidence quality differs.** XHR's `ontimeout`/
+  `onabort`/`onerror` are dedicated, spec-guaranteed, mutually
+  exclusive signals. Fetch can only reliably tell timeout from
+  cancellation apart when the caller uses `AbortSignal.timeout()`; the
+  still-common `setTimeout(() => controller.abort())` pattern produces
+  the same `AbortError` as a real cancellation, and this contract
+  reports it as `aborted` rather than guessing `timeout` — the
+  "broader observable category" rule above, applied to the one place
+  it actually bites.
+- **`classifyFetchOutcome` and `classifyXhrOutcome` remain two
+  functions, not one fed a translated input.** Their 2xx/4xx/5xx
+  status-range mapping is now byte-identical, which is real, visible,
+  accepted duplication — flagged in both files as now meeting the
+  "second real consumer" bar for a shared `classifyHttpStatus(status)`
+  helper, and deliberately not extracted by this amendment. Extraction
+  is a source change to a package this ADR's own constraints (Issue
+  #23) keep out of scope; it stays a live option for whoever next
+  touches either classifier.
+
+### `outcome`/`severity` reach the event unchanged
+
+`normalizeNetworkEvent()` (the one shared normalizer both capture
+paths funnel through) does not classify anything — it places the
+already-decided `severity` on the event's top-level field and
+`outcome` in `metadata.outcome`, exactly as the Decision section's
+outcome/severity axis split intended. No Core, Panel, or event-schema
+change accompanies this amendment; none was needed.
+
+### Fallback behavior
+
+Both classifiers fall through to `success`/`info` for a fulfilled
+response whose status they didn't anticipate (documented in each
+classifier as effectively unreachable given how `fetch()`/XHR actually
+expose statuses today, not a speculative branch) — a response was
+genuinely received, which each classifier treats as evidence of
+success rather than inventing an `http-error` the data doesn't
+support.
+
+### What this amendment does not touch
+
+No changes to `NetworkOutcome`'s values, either classifier's logic, or
+`normalizeNetworkEvent()` — this documents the already-shipped,
+already-tested contract. Endpoint grouping / route-template inference,
+WebSockets, SSE, request/response body capture, arbitrary header
+capture, in-flight request events, redirect-hop reporting, and
+uninstall behavior for an in-flight request all remain exactly as open
+as the original Open questions list states below — restated in the
+next section rather than left to be inferred from silence.
+
+### Open questions, current status
+
+Of the original Open questions list:
+
+- **Resolved by this amendment**: exact `outcome` enum values;
+  severity mapping per outcome.
+- **Resolved by the Issue #17 amendment** (partially — see that
+  amendment's own "still open" section 3): URL identity/normalization,
+  for the canonicalization/redaction half; application-specific
+  endpoint identity remains open.
+- **Resolved by the Issue #18 amendment**: response `Content-Type`/
+  size without the body.
+- **Still genuinely open, untouched by any amendment**: redirect
+  manual mode (surfacing intermediate redirect hops); uninstalling the
+  Network plugin mid-request. Also still open, from the v1 boundary
+  table and this ADR's original scope: endpoint grouping / route-
+  template inference, WebSockets, SSE, request/response body capture,
+  arbitrary header capture, in-flight request visibility.
+
 ## Amendment (Issue #17): URL contract — a bug fix, a resolved question, and a question that stays open
 
 This amendment does three distinct things, kept deliberately separate
