@@ -56,11 +56,13 @@ DevLens already provides a complete end-to-end event pipeline:
 
 - **Runtime** captures browser failures (`window.error`, unhandled rejections)
 - **Console** captures console activity, without ever suppressing native output
-- **Network** captures Fetch and asynchronous XHR requests, classified by
-  outcome, with the captured URL canonicalized and query-parameter
-  values redacted by default (Issue #17), and response `contentType`/
-  `contentLength` metadata captured where the browser exposes it
-  (Issue #18)
+- **Network** captures Fetch and asynchronous XHR requests, each classified
+  into one explicit outcome (`success`, `http-error`, `network-error`,
+  `aborted`, `timeout`, or `opaque`), with severity derived from that
+  outcome and, for `http-error`, the response's status range. The
+  captured URL is canonicalized and query-parameter values are redacted
+  by default (Issue #17), and response `contentType`/`contentLength`
+  metadata is captured where the browser exposes it (Issue #18)
 - **React** captures component errors via an error boundary, reporting
   React's `componentStack` alongside the caught error (client-only —
   see ADR-0013)
