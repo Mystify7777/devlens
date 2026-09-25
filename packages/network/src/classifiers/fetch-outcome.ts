@@ -1,10 +1,7 @@
-import type { EventSeverity } from "@devlens/core";
-import type { NetworkOutcome } from "../types";
+import type { OutcomeClassification } from "./http-status";
+import { classifyHttpStatus } from "./http-status";
 
-export interface OutcomeClassification {
-  outcome: NetworkOutcome;
-  severity: EventSeverity;
-}
+export type { OutcomeClassification };
 
 /**
  * Only what a fetch interceptor's `.then()`/`.catch()` handlers
@@ -84,26 +81,11 @@ export function classifyFetchOutcome(settlement: FetchSettlement): OutcomeClassi
     return { outcome: "opaque", severity: "info" };
   }
 
-  if (response.status >= 200 && response.status < 300) {
-    return { outcome: "success", severity: "info" };
-  }
-
-  if (response.status >= 400 && response.status < 500) {
-    return { outcome: "http-error", severity: "warn" };
-  }
-
-  if (response.status >= 500 && response.status < 600) {
-    return { outcome: "http-error", severity: "error" };
-  }
-
-  // Fulfilled with a status this function didn't anticipate — a raw
-  // 3xx is effectively unreachable via either fetch mode (MDN's
-  // Response.status page: status reads 0 for opaque/opaqueredirect/
-  // error responses; a followed redirect chain only ever exposes its
-  // final response), and 1xx informational responses aren't normally
-  // surfaced to fetch() callers either. Whatever this actually is, a
-  // response was genuinely received — that's evidence of success, not
-  // failure, so this reports the broader observable category rather
-  // than inventing an http-error the data doesn't support.
-  return { outcome: "success", severity: "info" };
+  // Status-range mapping (2xx/4xx/5xx/fallback) is shared with XHR —
+  // see classifyHttpStatus. A raw 3xx is effectively unreachable via
+  // either fetch mode (MDN's Response.status page: status reads 0 for
+  // opaque/opaqueredirect/error responses; a followed redirect chain
+  // only ever exposes its final response), and 1xx informational
+  // responses aren't normally surfaced to fetch() callers either.
+  return classifyHttpStatus(response.status);
 }

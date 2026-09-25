@@ -29,23 +29,20 @@ describe("classifyXhrOutcome", () => {
     });
   });
 
-  describe("event: 'load' — classified by status", () => {
-    it.each([200, 201, 204, 299])("status %i -> success/info", (status) => {
-      expect(classifyXhrOutcome({ event: "load", status })).toEqual({
+  // Exhaustive 2xx/4xx/5xx/fallback range coverage lives in
+  // http-status.test.ts. These cases only
+  // check that a `load` event's status actually reaches
+  // classifyHttpStatus() — delegation, not the range logic itself.
+  describe("event: 'load' — delegates status-range classification", () => {
+    it("status 200 -> success/info", () => {
+      expect(classifyXhrOutcome({ event: "load", status: 200 })).toEqual({
         outcome: "success",
         severity: "info",
       });
     });
 
-    it.each([400, 404, 429, 499])("status %i -> http-error/warn", (status) => {
-      expect(classifyXhrOutcome({ event: "load", status })).toEqual({
-        outcome: "http-error",
-        severity: "warn",
-      });
-    });
-
-    it.each([500, 502, 503, 599])("status %i -> http-error/error", (status) => {
-      expect(classifyXhrOutcome({ event: "load", status })).toEqual({
+    it("status 500 -> http-error/error", () => {
+      expect(classifyXhrOutcome({ event: "load", status: 500 })).toEqual({
         outcome: "http-error",
         severity: "error",
       });

@@ -10,33 +10,19 @@ function rejected(error: unknown) {
 }
 
 describe("classifyFetchOutcome", () => {
-  describe("2xx — success", () => {
-    it.each([200, 201, 204, 299])("status %i -> success/info", (status) => {
-      const response = new Response(null, { status });
-      expect(fulfilled(response)).toEqual({
-        outcome: "success",
-        severity: "info",
-      });
+  // Exhaustive 2xx/4xx/5xx/fallback range coverage lives in
+  // http-status.test.ts. These two cases only
+  // check that a fulfilled Response's status actually reaches
+  // classifyHttpStatus() — delegation, not the range logic itself.
+  describe("fulfilled — delegates status-range classification", () => {
+    it("status 200 -> success/info", () => {
+      const response = new Response(null, { status: 200 });
+      expect(fulfilled(response)).toEqual({ outcome: "success", severity: "info" });
     });
-  });
 
-  describe("4xx — http-error/warn", () => {
-    it.each([400, 404, 429, 499])("status %i -> http-error/warn", (status) => {
-      const response = new Response(null, { status });
-      expect(fulfilled(response)).toEqual({
-        outcome: "http-error",
-        severity: "warn",
-      });
-    });
-  });
-
-  describe("5xx — http-error/error", () => {
-    it.each([500, 502, 503, 599])("status %i -> http-error/error", (status) => {
-      const response = new Response(null, { status });
-      expect(fulfilled(response)).toEqual({
-        outcome: "http-error",
-        severity: "error",
-      });
+    it("status 500 -> http-error/error", () => {
+      const response = new Response(null, { status: 500 });
+      expect(fulfilled(response)).toEqual({ outcome: "http-error", severity: "error" });
     });
   });
 

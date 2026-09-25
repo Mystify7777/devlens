@@ -1,4 +1,5 @@
-import type { OutcomeClassification } from "./fetch-outcome";
+import type { OutcomeClassification } from "./http-status";
+import { classifyHttpStatus } from "./http-status";
 
 /**
  * Only what a `loadend` handler actually knows: which of the four
@@ -25,16 +26,10 @@ export interface XhrSettlement {
  * object just to reuse that function's code would hide a real
  * difference in evidence quality behind a fake shared shape.
  *
- * **Known, accepted duplication**: the status-range-to-outcome mapping
- * below (2xx/4xx/5xx/fallback) is identical to the second half of
- * `classifyFetchOutcome()`'s fulfilled branch. This is real, visible
- * evidence — not a hypothetical — that a narrow, shared
- * `classifyHttpStatus(status)` helper might now be justified (two real
- * consumers exist). Deliberately not extracted in this change, per
- * the explicit instruction not to abstract until XHR actually
- * demonstrated a real shared mapping — it has, now the duplication is
- * visible in both files for that decision to be made deliberately,
- * not preemptively.
+ * The status-range-to-outcome mapping (2xx/4xx/5xx/fallback) is
+ * shared with Fetch via `classifyHttpStatus()`. Entry logic (which
+ * terminal event fired) stays here, not shared: that's where XHR's
+ * evidence genuinely differs from Fetch's.
  */
 export function classifyXhrOutcome(settlement: XhrSettlement): OutcomeClassification {
   if (settlement.event === "abort") {
@@ -52,23 +47,7 @@ export function classifyXhrOutcome(settlement: XhrSettlement): OutcomeClassifica
     return { outcome: "network-error", severity: "error" };
   }
 
-  // event === "load": a response was received.
-  const { status } = settlement;
-
-  if (status >= 200 && status < 300) {
-    return { outcome: "success", severity: "info" };
-  }
-  if (status >= 400 && status < 500) {
-    return { outcome: "http-error", severity: "warn" };
-  }
-  if (status >= 500 && status < 600) {
-    return { outcome: "http-error", severity: "error" };
-  }
-
-  // A `load` event fired with a status this function didn't
-  // anticipate — a response was genuinely received, which is evidence
-  // of success, not failure. Same "report the broader observable
-  // category rather than guess" rule as classifyFetchOutcome's own
-  // fallback.
-  return { outcome: "success", severity: "info" };
+  // event === "load": a response was received. Status-range mapping
+  // is shared with Fetch — see classifyHttpStatus.
+  return classifyHttpStatus(settlement.status);
 }
