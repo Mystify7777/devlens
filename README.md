@@ -1,296 +1,209 @@
 # DevLens
 
-A framework-agnostic, embeddable developer diagnostics panel.
+**An embeddable browser diagnostics engine.** DevLens captures runtime errors, console calls, Fetch/XHR outcomes, and React component errors, converts them into one common event format, stores them, and displays them in an in-page inspection overlay.
 
-DevLens unifies runtime errors, console activity, network requests,
-and React component errors into a single normalized event stream,
-displayed live in an overlay you drop into any running app — no build
-config and no framework dependency required for the core engine.
-
-> **Engine first. UI second. Everything else is a client.**
->
-> Runtime, Console, Network, and React capture events. The Event Store
-> retains them. The Panel is just one consumer of that Store — a CLI or
-> a VS Code extension could just as easily read from the same Store.
-
-<!--
-  TODO: replace with a real screenshot of apps/playground. Rough
-  target layout:
-
-  +--------------------------------------------+
-  |  DevLens Playground                         |
-  |  [Throw Error] [console.log()] [...]        |
-  |----------------- DevLens -------------------|
-  |  ERROR  Uncaught Error       ...            |
-  |  INFO   Console Log         ...             |
-  |----------------------------------------------|
--->
+DevLens separates **capture, distribution, storage, and presentation**. Capture sources are plugins, the Store is independent of them, and the Panel is a consumer of the Store, never a capture mechanism.
 
 ---
 
-## Features
+## Key capabilities
 
-- Framework-agnostic core — no React/Vue/etc. dependency to capture events
-- Plugin-based capture architecture (`install()`/`uninstall()`, always idempotent)
-- Normalized, versioned event model shared across every capture source
-- Shadow-DOM-isolated overlay — no CSS collisions with the host app
-- Zero runtime dependencies in `@devlens/core`
-- 879 test cases across the suite (`pnpm test` to run them)
-- Every architectural decision recorded as an ADR before implementation
-
----
-
-## Status
-
-```text
-Core          ✅  complete, tested
-Runtime       ✅  complete, tested
-Console       ✅  complete, tested
-Playground    ✅  working
-Panel         ✅  complete, tested
-Network       ✅  complete, tested (Fetch + async XHR)
-React         ✅  complete, tested (client-only error-boundary capture)
-```
-
-DevLens already provides a complete end-to-end event pipeline:
-
-- **Runtime** captures browser failures (`window.error`, unhandled rejections)
-- **Console** captures console activity, without ever suppressing native output
-- **Network** captures Fetch and asynchronous XHR requests, each classified
-  into one explicit outcome (`success`, `http-error`, `network-error`,
-  `aborted`, `timeout`, or `opaque`), with severity derived from that
-  outcome and, for `http-error`, the response's status range. The
-  captured URL is canonicalized and query-parameter values are redacted
-  by default (Issue #17), and response `contentType`/`contentLength`
-  metadata is captured where the browser exposes it (Issue #18)
-- **React** captures component errors via an error boundary, reporting
-  React's `componentStack` alongside the caught error (client-only —
-  see ADR-0013)
-- **EventBus** distributes normalized events synchronously
-- **EventStore** retains them, decoupled from the Bus
-- **Panel** renders them live, inside a Shadow DOM overlay
-
-All of it is exercised end-to-end in `apps/playground`.
+- **Runtime error capture:** browser errors and unhandled promise rejections.
+- **Console interception:** wraps console methods while preserving native console output.
+- **Network capture:** Fetch and asynchronous XHR, with outcome classification, query-value redaction, and response metadata.
+- **React error reporting:** an error boundary that reports caught component errors with component-stack information.
+- **Unified event model:** every source emits the same versioned event shape.
+- **Extensible by design:** event `category` is an open string, so custom plugins can define their own categories.
+- **Inspection Panel:** filter by category and severity, case-insensitive search, keyboard navigation, pause/resume, clear, and an event inspector.
+- **Session export and import:** serialize the full Store as JSON and restore it later with whole-session validation.
+- **Playground app:** a verification app that exercises each capture path so you can watch events appear in the overlay.
 
 ---
 
-## How it fits together
+## Architecture
 
-```text
-Runtime  ─┐
-Console  ─┼─▶  EventBus  ─▶  EventStore  ─▶  Panel
-Network  ─┤                                 (renders only,
-React    ─┘                                  never captures)
+Multiple capture sources feed one event pipeline. The connector between the EventBus and the EventStore is what keeps the Store independent of the capture plugins. Imported sessions can populate the Store separately. The Panel displays stored events and exports sessions, but is never responsible for capture.
+
+```mermaid
+flowchart LR
+    subgraph Sources[Capture sources]
+        RT[Runtime]
+        CN[Console]
+        NW[Network]
+        RC[React]
+    end
+
+    RT --> BUS[EventBus]
+    CN --> BUS
+    NW --> BUS
+    RC --> BUS
+
+    BUS --> CONN[Store connector]
+    CONN --> STORE[EventStore]
+    IMP[Session import] --> STORE
+    STORE --> PANEL[Inspection Panel]
+    PANEL --> EXP[JSON export]
+
+    PG[Playground] -.-> SCN[Capture scenarios]
+    SCN -.-> Sources
 ```
 
-- **Capture** packages (`runtime`, `console`, `network`, `react`) observe
-  browser or component behavior and `bus.report()` normalized events.
-- The **Event Bus** is a synchronous, dependency-free dispatcher — no
-  async, no priority, no bubbling.
-- The **Event Store** is a plain data structure, deliberately decoupled
-  from the Bus, so other sources (e.g. an imported session, a WebSocket)
-  could feed it later.
-- The **Panel** only reads from the Store. It never captures events
-  itself — that separation is one of the project's core architectural
-  decisions.
+### Event lifecycle
 
-Runtime, Console, and Network implement the same minimal `Plugin`
-contract:
+Capture plugins normalize raw browser or framework events before reporting them. Network outcome classification and URL redaction happen in the plugin, upstream of the Bus. The Bus applies shared event processing and dispatches; the connector adds events to the Store.
 
-```ts
-interface Plugin {
-  install(): void; // idempotent
-  uninstall(): void; // idempotent
-}
+```mermaid
+sequenceDiagram
+    participant P as Capture plugin
+    participant B as EventBus
+    participant C as Store connector
+    participant S as EventStore
+    participant U as Inspection Panel
+
+    P->>B: Report normalized event
+    B->>B: Apply shared event processing
+    B->>C: Dispatch event
+    C->>S: Add event
+    S->>U: Notify subscribers
+    U->>U: Filter, search and render
 ```
 
-`@devlens/react` deliberately does not — a React error boundary has no
-global to patch, so its own React mount/unmount lifecycle is
-sufficient (see ADR-0013 and its amendment to ADR-0006).
+> The exact order of ID/version/timestamp assignment, middleware, freezing, and replay retention inside the Bus is documented in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-### `@devlens/react` usage
+### Event schema
 
-```tsx
-import { createEventBus } from "@devlens/core";
-import { createDevLensErrorBoundary } from "@devlens/react";
+This is a data contract, not a database schema. All capture sources emit this shape. `severity` is a closed set. `category` is an open string, so plugins may define their own values; the ones listed are examples. `metadata` and `context` are structured key-value objects.
 
-const bus = createEventBus(); // the same bus every other capture source reports through
-
-const DevLensErrorBoundary = createDevLensErrorBoundary(bus);
-
-function App() {
-  return (
-    <DevLensErrorBoundary fallback={<p>Something went wrong.</p>}>
-      <YourApplication />
-    </DevLensErrorBoundary>
-  );
-}
+```mermaid
+classDiagram
+    class DevLensEvent {
+        +string id
+        +number version
+        +string origin
+        +string category
+        +EventSeverity severity
+        +string title
+        +string message
+        +number timestamp
+        +string? stack
+        +Record? metadata
+        +Record? context
+        +string[]? tags
+    }
+    class EventSeverity {
+        <<enumeration>>
+        trace
+        debug
+        info
+        warn
+        error
+        fatal
+    }
+    class EventCategory {
+        <<open string>>
+        runtime
+        console
+        network
+        compiler
+        framework
+        performance
+        custom plugin categories
+    }
+    DevLensEvent --> EventSeverity
+    DevLensEvent --> EventCategory
 ```
 
-`fallback` is optional and entirely caller-owned — if omitted, the
-boundary renders `null` on a caught error rather than any default or
-styled UI. DevLens observes and reports; it never decides what your
-users see.
+The versioned event type is defined in [`packages/core/src/types.ts`](packages/core/src/types.ts).
 
-Alongside the caught `Error`, the boundary reports React's own
-`errorInfo.componentStack` — the component-tree location of the
-failure. This is worth capturing specifically because React minifies
-its own console error output in production builds, but
-`componentStack` is a direct API value, not console output, so it
-stays intact in every build mode (see ADR-0013 for the full reasoning).
+### Panel refresh behavior
 
-`@devlens/react` captures **client-side React rendering errors only**.
-Its reporting path is guarded when `window` is unavailable, so no
-report is produced during server rendering. SSR and React Server
-Components error capture are outside this package's scope.
+Pause blocks only the automatic refresh triggered by Store notifications. Capture and Store updates continue while paused, and explicit actions (changing filters, changing the search query, clearing, resuming) still update the Panel.
 
----
+```mermaid
+flowchart TD
+    N[Store notification] --> Q{Panel paused?}
+    Q -- No --> R[Recompute visible events]
+    Q -- Yes --> K[Skip automatic refresh]
 
-## Packages
+    RS[Resume] --> R
+    CF[Change filters] --> R
+    CS[Change search query] --> R
+    CL[Clear Store] --> R
 
-| Package                                  | Description                                                                                            | Status |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------ |
-| [`@devlens/core`](./packages/core)       | Event model, Event Bus, Event Store, Plugin contract                                                   | ✅     |
-| [`@devlens/runtime`](./packages/runtime) | Captures `window.error` / `unhandledrejection`                                                         | ✅     |
-| [`@devlens/console`](./packages/console) | Intercepts `console.log/info/debug/warn/error`                                                         | ✅     |
-| [`@devlens/panel`](./packages/panel)     | Shadow-DOM overlay that renders events live                                                            | ✅     |
-| [`@devlens/network`](./packages/network) | Captures Fetch and async XHR requests, classified by outcome, with URL redaction and response metadata | ✅     |
-| [`@devlens/react`](./packages/react)     | Client-only React error boundary reporting caught component errors                                     | ✅     |
-
-### `apps/playground`
-
-A minimal Vite app wiring Core + Runtime + Console + Network + React +
-Panel together, used to manually verify the whole pipeline. It is
-intentionally not a demo app — just enough UI (a handful of buttons and
-a small React component tree) to trigger each capture path and watch a
-row appear in the Panel overlay.
+    R --> L[Render list and preserve valid selection]
+```
 
 ---
 
 ## Getting started
 
-Requires [pnpm](https://pnpm.io) and a recent Node.js.
+### Prerequisites
+
+- Node.js and [pnpm](https://pnpm.io/). This is a pnpm workspace monorepo; use the versions pinned in the repository's configuration.
+
+### Install, build, and run the playground
 
 ```bash
+git clone https://github.com/Mystify7777/devlens.git
+cd devlens
+
 pnpm install
-pnpm build      # builds all packages (packages currently import from dist/)
+pnpm build
 pnpm --filter @devlens/playground dev
 ```
 
-Open the printed local URL. Click the buttons to trigger a thrown error,
-an unhandled rejection, each console method, a same-origin Fetch/XHR
-request (success and 404 variants), and the React demo's "Throw inside
-React component" button — each should produce a live row in the
-DevLens overlay.
+The playground triggers each capture path (runtime errors, console calls, Fetch/XHR, React errors) so you can observe the resulting events in the overlay.
 
-### Other root scripts
+### Repository checks
 
 ```bash
-pnpm build           # pnpm -r build
-pnpm test            # pnpm -r test
-pnpm clean           # pnpm -r clean
-pnpm format          # prettier --write .
-pnpm format:check    # prettier --check .
+pnpm test
+pnpm typecheck
+pnpm format:check
 ```
 
-No dedicated lint gate exists. TypeScript's `strict` mode (every
-package), the test suite, Prettier, and `git diff --check` are judged
-sufficient for the project's current size and contributor surface —
-see `docs/adr/0014-lint-policy.md` for the decision and what would
-change it.
+Other root scripts: `build`, `clean`, `format`.
 
 ---
 
-## Design principles
+## Public API
 
-These are treated as settled unless implementation reveals a genuine
-flaw — see `docs/adr/` before proposing changes that touch them:
+Each package exposes a public entry point. Instances and plugins returned by those entry points carry their own methods. Internal helpers (for example, the normalization functions) are not part of the supported API and are listed, marked internal, in [`docs/API.md`](docs/API.md).
 
-- **Design before code.** Every package started as an ADR (scope, API,
-  explicitly rejected alternatives) before any implementation.
-- **No premature abstraction.** Utilities and generalizations are only
-  introduced once a second real consumer justifies them — several were
-  built and then deliberately deleted for lack of one.
-- **Small, boring, composable files.** Pure normalizers, narrow
-  try/catch blocks, no speculative optimization.
-- **Plugins never throw into the host app**, and never suppress the
-  host app's own behavior (e.g. Console's interceptor always calls the
-  original `console.*` method first, unconditionally).
-- **Tests are required before a package is considered done.**
-
-See [`DESIGN.md`](./DESIGN.md) and [`docs/adr/`](./docs/adr) for the
-full architectural history and reasoning behind each decision.
+| Package | Public entry point | Returned methods | Responsibility |
+| --- | --- | --- | --- |
+| Core | `createEventBus`, `createEventStore` | Instance-specific methods | Event distribution and storage |
+| Runtime | `createRuntimePlugin` | Plugin lifecycle methods | Browser runtime error capture |
+| Console | `createConsolePlugin` | Plugin lifecycle methods | Console interception |
+| Network | `createNetworkPlugin` | Plugin lifecycle methods | Fetch/XHR capture |
+| React | `createDevLensErrorBoundary` | React component API | Component error reporting |
+| Panel | `createPanel` | `install`, `uninstall`, filtering, search, session controls, visibility and theme methods | Inspection UI |
 
 ---
 
-## Roadmap
+## Documentation
 
-Interactive inspection of captured events — inspector, filtering,
-search, keyboard navigation, and the pause/resume/clear/export
-operational layer — is complete (see `docs/specs/inspection.md` and
-`docs/adr/0009-v0.3.0-direction.md`, Option A, Accepted). Session
-Import is also complete: `importSession()` restores a previously
-exported session into an empty `EventStore`, preserving original
-`id`/`timestamp` and array order exactly (see
-`docs/specs/session-import.md` and `docs/adr/0011-session-import.md`,
-Accepted), and the Panel's own Session Restore UI (an Import button,
-file picker, and status region alongside Export) is complete as well.
-`EventStore.size` (`docs/adr/0012-eventstore-size.md`) exposes current
-Store occupancy directly, replacing two internal `getAll().length`
-workarounds.
-
-`@devlens/react` is also complete: a client-only React error boundary
-that reports caught component errors — including React's own
-`componentStack` — through the same `EventBus` every other capture
-source uses. It is **not** a Panel wrapper; see
-`docs/adr/0013-react-integration-role.md` for why, and its amendments
-to `docs/adr/0006-plugin-contract.md`, `docs/adr/0008-panel.md`, and
-`docs/adr/0009-v0.3.0-direction.md` for the historical correction to
-this project's earlier, contradictory documentation on React's role.
-
-Network URL canonicalization/query redaction (Issue #17) and response
-`contentType`/`contentLength` metadata (Issue #18) are both complete —
-see `docs/adr/0010-network-plugin.md`'s amendments. Response-body
-capture, arbitrary header capture, WebSockets, SSE, and endpoint
-grouping are not implemented and are not currently planned work, not
-merely omitted from this list.
-
-Not yet committed to — this is a proposed direction, open for
-discussion rather than a locked sequence:
-
-- A reactive Panel-state adapter for React (distinct from the
-  error-boundary capture above) — deferred pending evidence of real
-  demand; see `docs/adr/0013-react-integration-role.md`'s Scope
-  boundaries.
+- [`docs/README.md`](docs/README.md): documentation index
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): system and event-flow diagrams
+- [`docs/EVENT_SCHEMA.md`](docs/EVENT_SCHEMA.md): event contract
+- [`docs/API.md`](docs/API.md): public APIs and internal responsibilities
+- [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md): setup, scripts, tests, troubleshooting
+- [`docs/specs/`](docs/specs/): specifications, including `inspection.md` and `session-import.md`
+- [`docs/adr/`](docs/adr/): architecture decision records
+- [`docs/research/`](docs/research/): research notes
 
 ---
 
-## Monorepo layout
+## Design notes
 
-```text
-devlens/
-├── docs/adr/           architectural decision records
-├── packages/
-│   ├── core/           event bus, store, plugin contract
-│   ├── runtime/        window.error / unhandledrejection capture
-│   ├── console/        console.* interception
-│   ├── network/        fetch/XHR interception, outcome classification
-│   ├── panel/          Shadow-DOM overlay renderer
-│   └── react/          client-only error-boundary capture
-├── apps/
-│   └── playground/     manual end-to-end verification app
-├── DESIGN.md
-└── package.json         pnpm workspace root
-```
-
-Tooling is deliberately minimal: plain pnpm workspaces (no Turborepo),
-no ESLint/Husky yet — Prettier was added for formatting enforcement;
-both ESLint and Husky remain postponed until the package count and
-contributor surface actually justify them.
+- **Capture is decoupled from display.** The Panel reads from the Store and never captures events itself.
+- **The connector keeps the Store independent.** The Store has no knowledge of capture plugins.
+- **Normalization happens upstream of the Bus.** Network classification and URL redaction are done by the plugins, keeping the Bus generic.
+- **No application database.** The EventStore is in-memory; the data model is the event contract above, not a persistent database schema.
+- **Pause affects automatic refresh only.** Capture and Store updates continue while the Panel is paused.
 
 ---
 
 ## License
 
-Not yet decided / no license file has been added. Treat this repository
-as all-rights-reserved until a `LICENSE` file is added.
+See the repository's `LICENSE` file.
